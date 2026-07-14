@@ -1,0 +1,13 @@
+fastapi>=0.100.0
+uvicorn[standard]
+requests
+httpx
+pandas
+matplotlib
+seaborn
+langchain-core
+langchain-community
+langchain-ollama
+langgraph
+pydantic>=2.0
+pyjwt
