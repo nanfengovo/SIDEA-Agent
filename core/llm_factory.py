@@ -11,6 +11,7 @@ def create_llm(model_name: str) -> BaseChatModel:
         raise ValueError(f"未在数据库中找到模型配置: {model_name}")
     provider = llm_model_config["provider"]
     base_url = llm_model_config["base_url"]
+    model_name = llm_model_config["model_name"]
     match provider:
         case "openai":
             return ChatOpenAI(
@@ -22,6 +23,7 @@ def create_llm(model_name: str) -> BaseChatModel:
             return ChatOllama(
                 model=model_name,
                 base_url=base_url,
+                temperature=0.0
             )
         case _:
             raise ValueError(f"不支持的模型提供商: {provider}")

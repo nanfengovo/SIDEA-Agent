@@ -14,7 +14,7 @@ def get_llm_model_config(key):
         cursor = conn.cursor()
         cursor.execute(
         """
-        SELECT * FROM llm_models WHERE model_name =?
+        SELECT * FROM llm_models WHERE model_id =?
         """,
             (key,)
         )
