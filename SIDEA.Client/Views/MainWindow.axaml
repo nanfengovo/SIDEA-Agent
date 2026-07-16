@@ -1,0 +1,141 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SIDEA.Client.ViewModels"
+        xmlns:converters="using:SIDEA.Client.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="SIDEA.Client.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SIDEA Agent - C# Avalonia"
+        RequestedThemeVariant="Dark"
+        Background="#05050a">
+
+    <Window.Resources>
+        <converters:RoleToBackgroundConverter x:Key="RoleToBackgroundConverter"/>
+        <converters:RoleToAlignmentConverter x:Key="RoleToAlignmentConverter"/>
+    </Window.Resources>
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="70,*">
+        <!-- Top Navigation Bar -->
+        <Border Grid.Row="0" Background="#0a0a12" BorderBrush="#1a1a2e" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <!-- Title -->
+                    <TextBlock Text="SIDEA 智能体" FontSize="22" FontWeight="Bold" Foreground="#00f2fe" VerticalAlignment="Center"/>
+                    <TextBlock Text="(C# 原生版)" FontSize="12" Foreground="#8892b0" VerticalAlignment="Center" Margin="10,4,0,0"/>
+                </StackPanel>
+                
+                <!-- Selectors -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <TextBlock Text="模型:" Foreground="#8892b0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox Width="160" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" Margin="0,0,20,0" Background="#151521" Foreground="#f8f8f2" BorderBrush="#00f2fe">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Text="角色:" Foreground="#8892b0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox Width="180" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkill}" Margin="0,0,20,0" Background="#151521" Foreground="#f8f8f2" BorderBrush="#4facfe">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <Button Content="⚙️" Width="40" Height="40" CornerRadius="20" Background="Transparent" Foreground="#b300ff" FontSize="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="OnAdminButtonClicked"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Workspace -->
+        <Grid Grid.Row="1" ColumnDefinitions="4*,4,3*" Margin="15">
+            <!-- Chat Panel (Left) -->
+            <Border Grid.Column="0" Padding="15" CornerRadius="16" Background="#0a0a12" BorderBrush="#1a1a2e" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                        <TextBlock Text="SIDEA 智能对话" FontSize="18" FontWeight="SemiBold" Foreground="#00f2fe"/>
+                        <TextBlock Text="•" Foreground="#00f2fe" Margin="10,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding SelectedSkill.Name}" Foreground="#8892b0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <!-- Message List -->
+                    <ScrollViewer Grid.Row="1" Margin="0,0,0,15">
+                        <ItemsControl ItemsSource="{Binding ChatMessages}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,6" Padding="15" CornerRadius="12" 
+                                            Background="{Binding Role, Converter={StaticResource RoleToBackgroundConverter}}"
+                                            HorizontalAlignment="{Binding Role, Converter={StaticResource RoleToAlignmentConverter}}"
+                                            MaxWidth="500">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Role}" FontSize="11" Foreground="#8892b0" Margin="0,0,0,6"/>
+                                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="#f8f8f2" LineHeight="22"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Input Area -->
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto" Margin="0,5,0,0">
+                        <TextBox Grid.Row="0" Grid.Column="0" Text="{Binding InputText}" 
+                                 PlaceholderText="输入指令..." 
+                                 Background="#151521" Foreground="#f8f8f2" BorderBrush="#00f2fe" CornerRadius="10"
+                                 Padding="12,10,12,35" MinHeight="70"
+                                 KeyDown="OnInputKeyDown"
+                                 TextWrapping="Wrap"/>
+                        
+                        <!-- Advanced Controls inside TextBox bottom-right area -->
+                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,5,5">
+                            <ComboBox ItemsSource="{Binding ThinkingDepths}" SelectedItem="{Binding ThinkingDepthDisplay}" Background="#1a1a2e" Foreground="#00f2fe" BorderBrush="#00f2fe" BorderThickness="1" CornerRadius="4" Height="25" FontSize="11" Margin="0,0,5,0">
+                            </ComboBox>
+                            <ComboBox ItemsSource="{Binding ContextLengths}" SelectedItem="{Binding ContextLengthDisplay}" Background="#1a1a2e" Foreground="#b300ff" BorderBrush="#b300ff" BorderThickness="1" CornerRadius="4" Height="25" FontSize="11">
+                            </ComboBox>
+                        </StackPanel>
+
+                        <Button Grid.Row="0" Grid.Column="1" Margin="15,0,0,0" Width="80" Height="70" CornerRadius="10"
+                                Command="{Binding SendMessageCommand}"
+                                Background="#00f2fe" Foreground="#05050a" FontWeight="Bold"
+                                Content="发送" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- Resizer dummy space -->
+            <GridSplitter Grid.Column="1" Background="Transparent"/>
+
+            <!-- Trace Panel (Right) -->
+            <Border Grid.Column="2" Padding="15" CornerRadius="16" Background="#0a0a12" BorderBrush="#1a1a2e" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="执行链路追踪 (Trace)" FontSize="18" FontWeight="SemiBold" Foreground="#4facfe" Margin="0,0,0,15"/>
+                    
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding TraceEvents}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,5" Padding="12" CornerRadius="8" Background="#151521" BorderBrush="#00f2fe" BorderThickness="2,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Timestamp}" FontSize="11" Foreground="#8892b0"/>
+                                            <TextBlock Text="{Binding Description}" FontSize="13" TextWrapping="Wrap" Foreground="#b300ff" Margin="0,6,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,13 +1,58 @@
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
+from core.log_parsers.factory import ParserFactory
+from infra.config_store import ConfigStore
+import asyncio
 
-# 定义参数效验模型
-class PLCLogRequest(BaseModel):
-    time_range: str = Field(description="查询的时间范围，比如‘今天’，‘最近一小时’")
-    device_id: str = Field(default="ALL", description="设备ID，如果没有指定则为 ALL")
+config_store = ConfigStore()
 
-@tool(args_schema=PLCLogRequest)
-def read_plc_log(time_range: str, device_id: str) -> str:
-    """读取并分析 PLC 控制器的报警和过载日志。当用户询问机器停机、故障原因时使用"""
-    print(f"[Tool Executed] 查询PLC日志: 时间={time_range}, 设备={device_id}")
-    return f"找到了 {time_range} 的 {device_id} 日志：发生过 3 次电机过载停机异常。"
+class LogQueryArgs(BaseModel):
+    date_str: str = Field(description="查询日期，格式: YYYY-MM-DD")
+
+def _read_plc_log_sync(date_str: str) -> str:
+    """同步实现 - 用于 .stream() 同步调用场景"""
+    try:
+        parser = ParserFactory.create("plc", config_store)
+        df = parser.parse_directory(date_str)
+        if df.empty:
+            return "未找到匹配的日志。"
+        agg_df = parser.aggregate(df)
+        return parser.to_markdown(agg_df)
+    except Exception as e:
+        return f"日志读取失败: {e}"
+
+async def _read_plc_log_async(date_str: str) -> str:
+    """异步实现 - 用于 .astream() / astream_events() 异步调用场景"""
+    return await asyncio.to_thread(_read_plc_log_sync, date_str)
+
+read_plc_log = StructuredTool.from_function(
+    func=_read_plc_log_sync,
+    coroutine=_read_plc_log_async,
+    name="read_plc_log",
+    description="提取和汇总指定日期的 PLC 报错与异常日志",
+    args_schema=LogQueryArgs,
+)
+
+def _read_rcs_log_sync(date_str: str) -> str:
+    """同步实现"""
+    try:
+        parser = ParserFactory.create("rcs", config_store)
+        df = parser.parse_directory(date_str)
+        if df.empty:
+            return "未找到匹配的日志。"
+        agg_df = parser.aggregate(df)
+        return parser.to_markdown(agg_df)
+    except Exception as e:
+        return f"日志读取失败: {e}"
+
+async def _read_rcs_log_async(date_str: str) -> str:
+    """异步实现"""
+    return await asyncio.to_thread(_read_rcs_log_sync, date_str)
+
+read_rcs_log = StructuredTool.from_function(
+    func=_read_rcs_log_sync,
+    coroutine=_read_rcs_log_async,
+    name="read_rcs_log",
+    description="提取和汇总指定日期的 RCS API 性能与错误日志",
+    args_schema=LogQueryArgs,
+)

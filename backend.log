@@ -1,0 +1,57 @@
+INFO:     Will watch for changes in these directories: ['/Users/feng/Documents/Code/demo/Python/SIDEA Agent']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [81548] using WatchFiles
+SQLite database initialized successfully (v3.0)
+Default configs seeded successfully
+Default skills seeded successfully
+INFO:     Started server process [81612]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61497 - "GET /api/history/sessions/a3fd6707-a967-4808-85c5-f7e0acb50499/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61541 - "GET /api/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61580 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61580 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61580 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61642 - "GET /api/history/sessions/a3fd6707-a967-4808-85c5-f7e0acb50499/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61645 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61651 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61650 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61684 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61682 - "GET /api/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61679 - "GET /api/history/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61681 - "GET /api/history/sessions/e8d66c64-2123-43a8-8276-fa0d0b46666a/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61690 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61703 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61734 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61733 - "GET /api/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61731 - "GET /api/history/sessions/026125a4-d410-49a2-88f3-624831368168/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61729 - "GET /api/history/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61734 - "GET /api/history/sessions/026125a4-d410-49a2-88f3-624831368168/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61736 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61742 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61740 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61752 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61764 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61764 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61764 - "GET /api/admin/tools HTTP/1.1" 404 Not Found
+WARNING:  WatchFiles detected changes in 'api/app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [81612]
+INFO:     Started server process [25988]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61809 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61809 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61809 - "GET /api/admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61831 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61826 - "GET /api/history/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61830 - "GET /api/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61827 - "GET /api/history/sessions/42f28936-0d9a-40c2-a17c-f40f7fc20b96/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61827 - "GET /api/history/sessions/42f28936-0d9a-40c2-a17c-f40f7fc20b96/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61833 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61837 - "GET /api/admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61836 - "GET /api/admin/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61840 - "GET /api/admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62230 - "GET /api/history/sessions/42f28936-0d9a-40c2-a17c-f40f7fc20b96/messages HTTP/1.1" 200 OK

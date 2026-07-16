@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SIDEA.Client.ViewModels"
+        x:Class="SIDEA.Client.Views.ConfigEditWindow"
+        Title="Edit Config" Width="500" Height="400"
+        WindowStartupLocation="CenterOwner"
+        Background="#12121a">
+    <StackPanel Margin="20" Spacing="15">
+        <TextBlock Text="Config Key" Foreground="White" FontWeight="Bold"/>
+        <TextBox x:Name="KeyBox" Text="" IsEnabled="False" Background="#1a1a2e" Foreground="White"/>
+        
+        <TextBlock Text="Config Value" Foreground="White" FontWeight="Bold"/>
+        <TextBox x:Name="ValueBox" Text="" AcceptsReturn="True" Height="80" Background="#1a1a2e" Foreground="White"/>
+        
+        <TextBlock Text="Description" Foreground="White" FontWeight="Bold"/>
+        <TextBox x:Name="DescBox" Text="" Background="#1a1a2e" Foreground="White"/>
+        
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,20,0,0">
+            <Button Content="Cancel" Click="OnCancelClick" Background="#2a2a3e" Foreground="White"/>
+            <Button Content="Save" Click="OnSaveClick" Background="#00f2fe" Foreground="Black" FontWeight="Bold"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

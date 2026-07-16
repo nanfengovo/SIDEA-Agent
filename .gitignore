@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.sqlite
+logs/
+uploads/
+.DS_Store
+frontend/node_modules/
+SIDEA.Client/bin/
+SIDEA.Client/obj/

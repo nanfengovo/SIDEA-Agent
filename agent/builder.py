@@ -1,70 +1,69 @@
+"""
+agent/builder.py
+用于在 PyCharm 中直接调试 Agent 工具调用行为的入口脚本。
+使用同步 .stream() 接口，可以在终端实时看到思维链。
+"""
+import os
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+os.environ["no_proxy"] = "localhost,127.0.0.1"
+
+from pathlib import Path
+import sqlite3
 from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from core.llm_factory import create_llm
-from skills.registry import get_role_info, get_tool_for_role
+from skills.registry import SkillRegistry
 
+# ── 检查点 ──────────────────────────────────────────────────────────────────
+DB_PATH = Path(__file__).parent.parent / "checkpoints.sqlite"
+sqlite_conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+checkpointer = SqliteSaver(sqlite_conn)
+checkpointer.setup()
 
-def build_agent(role_name:str,override_model_name:str=None):
+def build_agent(skill_id: str = "plc_diagnostics"):
     """
-    用提示词，模型和工具组装Agent
-    :param role_name: 角色名称，不同的角色对应不同的提示词
-    :param override_model_name: 模型名称
-    :return:
+    用 SkillRegistry 加载技能配置，构建 LangGraph React Agent。
+    :param skill_id: 技能 ID，对应数据库 skills 表
+    :return: LangGraph CompiledStateGraph
     """
-    # 获取特定角色的提示词
-    role_info = get_role_info(role_name)
-    if not role_info:
-        raise ValueError(f"无法组装 Agent，找不到角色: {role_name}")
+    registry = SkillRegistry()
+    skill_data = registry.load_skill(skill_id)
 
-    system_prompt = role_info["system_prompt"]
-
-    # 模型判定 优先级前端选择>角色默认>兜底模型
-    if override_model_name:
-        final_model_name = override_model_name
-    elif role_info["default_model_id"]:
-        final_model_name = role_info["default_model_id"]
-    else:
-        final_model_name = "ollama_gemma"
-
-    llm = create_llm(final_model_name)
-
-    tools = get_tool_for_role(role_name)
+    llm = create_llm()  # 从 ConfigStore 读当前配置
+    tools = skill_data["tools"]
+    system_prompt = skill_data["system_prompt"]
 
     agent = create_react_agent(
-        model = llm,
-        tools = tools,
-        prompt=system_prompt
+        model=llm,
+        tools=tools,
+        prompt=system_prompt,
+        checkpointer=checkpointer,
     )
-
     return agent
 
 
 if __name__ == "__main__":
-    import os
+    skill = "plc_diagnostics"
+    my_agent = build_agent(skill)
+    print(f"✅ Agent [{skill}] 组装成功，挂载工具: {[t.name for t in SkillRegistry().load_skill(skill)['tools']]}")
 
-    os.environ["NO_PROXY"] = "localhost,127.0.0.1"
-    os.environ["no_proxy"] = "localhost,127.0.0.1"
-    # 1. 模拟前端点选了“PLC 故障诊断专家”
-    my_agent = build_agent("PLC 故障诊断专家")
-    print("✅ Agent 组装成功！")
-
-    # 2. 模拟用户发消息：由于我们写了日志查询工具，我们故意问一个需要查工具的问题
     user_message = "今天PLC设备出啥事了？"
-    print(f"👨‍💻 用户: {user_message}")
+    print(f"\n👨‍💻 用户: {user_message}\n")
+    print("=" * 60)
 
-    # 3. 让 Agent 开始工作，并打印出它的思维链
-    # LangGraph 需要的输入格式是一个包含 messages 的字典
+    config = {"configurable": {"thread_id": "debug_session_002"}}
     inputs = {"messages": [("user", user_message)]}
 
-    # stream 模式可以看到它是一步步思考还是调用工具
-    for chunk in my_agent.stream(inputs, stream_mode="values"):
+    for chunk in my_agent.stream(inputs, config=config, stream_mode="values"):
         last_message = chunk["messages"][-1]
+        msg_type = last_message.__class__.__name__
 
-        # 看看是人在说话，还是 AI 在思考，还是工具在返回结果
-        print(f"\n[{last_message.type.upper()}] 正在输出...")
-
-        # 如果大模型决定调用工具，打印出它想用啥工具、传了啥参数
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            print("🛠️ 准备调用工具:", last_message.tool_calls)
-        else:
-            print(last_message.content)
+            print(f"\n🛠️  [AI] 准备调用工具:")
+            for tc in last_message.tool_calls:
+                print(f"    ▶ {tc['name']}({tc['args']})")
+        elif msg_type == "ToolMessage":
+            print(f"\n📦 [TOOL:{last_message.name}] 返回结果:\n{last_message.content[:500]}")
+        elif msg_type == "AIMessage" and last_message.content:
+            print(f"\n🤖 [AI] 最终回复:\n{last_message.content}")
