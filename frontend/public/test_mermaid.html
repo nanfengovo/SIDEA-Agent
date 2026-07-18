@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mermaid Test</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true });
+  </script>
+</head>
+<body>
+  <div class="mermaid">
+graph TD
+    A[开始：接收到异常/报警] --> B{初步判断与信息收集};
+    B --> C[检查物理层：电源、接线、I/O 状态];
+    C -- 无明显问题 ---> D[检查软件逻辑：程序运行状态、变量值];
+    D -- 逻辑正确 ---> E[读取 PLC 诊断日志 (read_plc_log)];
+    E --> F{分析日志：确定错误类型和发生时间};
+    F -- 错误指向特定模块/节点 ---> G[结合实时节点状态 (plc_read) 验证];
+    G --> H{定位问题源：是硬件故障、通信中断还是软件逻辑错误?};
+    H -- 硬件故障 ---> I[更换或修复物理组件];
+    I --> J[重新测试系统运行];
+    H -- 通信/软件错误 ---> K[调试程序代码 / 检查通信参数];
+    K --> L[写入修正值 (plc_write) 或修改逻辑];
+    L --> M{验证：系统是否恢复正常?};
+    M -- 正常 ---> N[结束：问题解决];
+    N --> O[记录故障分析报告];
+  </div>
+</body>
+</html>

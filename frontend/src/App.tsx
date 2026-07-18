@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ChatPanel from './components/ChatPanel';
 import TracePanel from './components/TracePanel';
-import { Activity, Sun, Moon, Cpu, Database, Languages, Settings } from 'lucide-react';
+import { Activity, Sun, Moon, Cpu, Database, Languages, Settings, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from './store';
-import { ConfigProvider, theme as antdTheme, Select } from 'antd';
+import { ConfigProvider, theme as antdTheme, Select, Tooltip } from 'antd';
 import AdminLayout from './pages/admin/AdminLayout';
+import KnowledgePanel from './components/KnowledgePanel';
 import HistorySidebar from './components/history/HistorySidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { TraceEvent } from './types';
@@ -13,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import './i18n';
 import './index.css';
 import 'antd/dist/reset.css';
+import { getApiUrl } from './config';
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -20,15 +22,19 @@ function App() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   
   // Resizable panels state
-  const [leftWidth, setLeftWidth] = useState(40); // percentage
+  const [leftWidth, setLeftWidth] = useState(70); // percentage
   const [isDragging, setIsDragging] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'admin'>('chat');
+  const [viewMode, setViewMode] = useState<'chat' | 'admin' | 'knowledge'>('chat');
   
   // Skill & Model state
   const [skills, setSkills] = useState<{skill_id: string, skill_name: string}[]>([]);
   const [currentSkill, setCurrentSkill] = useState('plc_diagnostics');
   const [currentModel, setCurrentModel] = useState('gemma4:e2b-it-qat');
-  const [currentSessionId, setCurrentSessionId] = useState<string>(uuidv4());
+  const [permissionMode, setPermissionMode] = useState('ask_always');
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+    return localStorage.getItem('sidea_session_id') || uuidv4();
+  });
+  const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
 
   useEffect(() => {
     i18n.changeLanguage(language);
@@ -40,22 +46,28 @@ function App() {
   }, [theme, language, i18n]);
 
   useEffect(() => {
+    localStorage.setItem('sidea_session_id', currentSessionId);
+  }, [currentSessionId]);
+
+  useEffect(() => {
     // Fetch available skills (roles)
-    fetch('http://localhost:8000/api/skills')
+    fetch(`${getApiUrl()}/admin/skills`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setSkills(data);
+        const skillsArray = data.items || data;
+        if (Array.isArray(skillsArray) && skillsArray.length > 0) {
+          const enabledSkills = skillsArray.filter(s => s.is_enabled === 1);
+          setSkills(enabledSkills.length > 0 ? enabledSkills : skillsArray);
           // If plc_diagnostics doesn't exist, select the first one
-          if (!data.find(s => s.skill_id === 'plc_diagnostics')) {
-            setCurrentSkill(data[0].skill_id);
+          if (!skillsArray.find(s => s.skill_id === 'plc_diagnostics')) {
+            setCurrentSkill(skillsArray[0].skill_id);
           }
         }
       })
       .catch(console.error);
       
     // Fetch config to get current model
-    fetch('http://localhost:8000/api/config')
+    fetch(`${getApiUrl()}/config`)
       .then(res => res.json())
       .then(data => {
         if (data && data.LLM_MODEL_NAME) {
@@ -67,7 +79,7 @@ function App() {
 
   const handleModelChange = (val: string) => {
     setCurrentModel(val);
-    fetch('http://localhost:8000/api/config/LLM_MODEL_NAME', {
+    fetch(`${getApiUrl()}/config/LLM_MODEL_NAME`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ config_value: val, category: 'llm' })
@@ -123,6 +135,7 @@ function App() {
           currentSessionId={currentSessionId}
           onSelectSession={(id) => setCurrentSessionId(id)}
           onNewSession={() => setCurrentSessionId(uuidv4())}
+          refreshTrigger={sessionRefreshTrigger}
         />
         
         {/* Top Navigation Bar */}
@@ -170,21 +183,32 @@ function App() {
 
             <div className="h-6 w-px bg-[var(--border-color)] mx-2"></div>
 
-            <button onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors" title="Switch Language">
-              <Languages size={18} className="text-[var(--accent-cyan)]" />
-            </button>
-            <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors" title="Toggle Theme">
-              <AnimatePresence mode="wait">
-                {theme === 'dark' ? (
-                  <motion.div key="dark" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}><Sun size={18} className="text-[#fadb14]" /></motion.div>
-                ) : (
-                  <motion.div key="light" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}><Moon size={18} className="text-[#1890ff]" /></motion.div>
-                )}
-              </AnimatePresence>
-            </button>
-            <button onClick={() => setViewMode('admin')} className="p-2 rounded-full hover:bg-[var(--accent-purple)]/20 transition-colors" title="Admin Dashboard">
-              <Settings size={18} className="text-[var(--accent-purple)]" />
-            </button>
+            <Tooltip title="Switch Language" placement="bottom">
+              <button onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors">
+                <Languages size={18} className="text-[var(--accent-cyan)]" />
+              </button>
+            </Tooltip>
+            <Tooltip title="Toggle Theme" placement="bottom">
+              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors">
+                <AnimatePresence mode="wait">
+                  {theme === 'dark' ? (
+                    <motion.div key="dark" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}><Sun size={18} className="text-[#fadb14]" /></motion.div>
+                  ) : (
+                    <motion.div key="light" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}><Moon size={18} className="text-[#1890ff]" /></motion.div>
+                  )}
+                </AnimatePresence>
+              </button>
+            </Tooltip>
+            <Tooltip title="知识库管理" placement="bottom">
+              <button onClick={() => setViewMode('knowledge')} className="p-2 rounded-full hover:bg-[var(--accent-blue)]/20 transition-colors">
+                <BookOpen size={18} className="text-[var(--accent-blue)]" />
+              </button>
+            </Tooltip>
+            <Tooltip title="Admin Dashboard" placement="bottom">
+              <button onClick={() => setViewMode('admin')} className="p-2 rounded-full hover:bg-[var(--accent-purple)]/20 transition-colors">
+                <Settings size={18} className="text-[var(--accent-purple)]" />
+              </button>
+            </Tooltip>
           </div>
         </div>
         )}
@@ -200,7 +224,16 @@ function App() {
             style={{ width: `${leftWidth}%` }}
             className="flex flex-col glass-panel p-5 relative overflow-hidden h-full z-10"
           >
-            <ChatPanel onEvent={handleNewEvent} onClear={clearEvents} skillId={currentSkill} sessionId={currentSessionId} />
+            <ChatPanel 
+              onEvent={handleNewEvent} 
+              onClear={clearEvents} 
+              onLoadTrace={(events) => setEvents(events)}
+              skillId={currentSkill} 
+              sessionId={currentSessionId} 
+              onMessageSent={() => setSessionRefreshTrigger(prev => prev + 1)}
+              permissionMode={permissionMode}
+              onPermissionModeChange={setPermissionMode}
+            />
           </motion.div>
           
           {/* Draggable Resizer */}
@@ -228,8 +261,10 @@ function App() {
             </div>
           </motion.div>
         </div>
-        ) : (
+        ) : viewMode === 'admin' ? (
           <AdminLayout onExit={() => setViewMode('chat')} />
+        ) : (
+          <KnowledgePanel onExit={() => setViewMode('chat')} />
         )}
       </div>
     </ConfigProvider>

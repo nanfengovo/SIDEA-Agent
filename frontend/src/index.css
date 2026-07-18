@@ -139,3 +139,20 @@ textarea {
 textarea::-webkit-resizer {
   display: none !important;
 }
+
+/* Custom dark notification for Ant Design */
+.custom-dark-notification {
+  background-color: rgba(10, 10, 15, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2) !important;
+}
+.custom-dark-notification .ant-notification-notice-message {
+  color: #ef4444 !important;
+}
+.custom-dark-notification .ant-notification-notice-description {
+  color: #f8f8f2 !important;
+}
+.custom-dark-notification .ant-notification-notice-close-icon {
+  color: #8892b0 !important;
+}

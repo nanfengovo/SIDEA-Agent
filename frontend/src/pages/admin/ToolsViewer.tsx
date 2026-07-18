@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, message } from 'antd';
-import { Wrench } from 'lucide-react';
+import { Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { getApiUrl } from '../../config';
 
 interface ToolItem {
   name: string;
@@ -15,7 +16,7 @@ export default function ToolsViewer() {
   const fetchTools = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/tools');
+      const res = await fetch(`${getApiUrl()}/tools`);
       const data = await res.json();
       setTools(data);
     } catch (e) {

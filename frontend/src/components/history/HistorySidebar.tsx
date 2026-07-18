@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MessageSquare, Trash2, Plus, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getApiUrl } from '../../config';
 
 interface ChatSession {
   session_id: string;
@@ -12,15 +13,16 @@ interface HistorySidebarProps {
   currentSessionId: string;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
+  refreshTrigger?: number;
 }
 
-export default function HistorySidebar({ currentSessionId, onSelectSession, onNewSession }: HistorySidebarProps) {
+export default function HistorySidebar({ currentSessionId, onSelectSession, onNewSession, refreshTrigger = 0 }: HistorySidebarProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   const fetchSessions = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/history/sessions');
+      const res = await fetch(`${getApiUrl()}/history/sessions`);
       if (res.ok) {
         const data = await res.json();
         setSessions(data);
@@ -32,12 +34,12 @@ export default function HistorySidebar({ currentSessionId, onSelectSession, onNe
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [refreshTrigger]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/history/sessions/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiUrl()}/history/sessions/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSessions(prev => prev.filter(s => s.session_id !== id));
         if (currentSessionId === id) {

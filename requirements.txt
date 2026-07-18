@@ -11,3 +11,9 @@ langchain-ollama
 langgraph
 pydantic>=2.0
 pyjwt
+chromadb
+sentence-transformers
+langchain-huggingface
+PyPDF2
+python-docx
+openpyxl

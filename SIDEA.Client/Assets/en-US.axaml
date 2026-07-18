@@ -1,0 +1,11 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" 
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+    <system:String x:Key="StrNewSession">New Session</system:String>
+    <system:String x:Key="StrModels">Model</system:String>
+    <system:String x:Key="StrRoles">Role</system:String>
+    <system:String x:Key="StrAddAttachment">Attachment</system:String>
+    <system:String x:Key="StrKnowledgeBase">Knowledge Base</system:String>
+    <system:String x:Key="StrInputPlaceholder">Ask me anything... (Shift+Enter for newline, Enter to send)</system:String>
+    <system:String x:Key="StrTraceLog">Trace Log</system:String>
+</ResourceDictionary>

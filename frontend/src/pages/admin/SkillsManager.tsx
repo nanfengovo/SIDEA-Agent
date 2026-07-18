@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Tabs } from 'antd';
 import { Plus, Edit, Trash2, Cpu } from 'lucide-react';
+import { getApiUrl } from '../../config';
 import PromptEditor from './PromptEditor';
 
 interface SkillItem {
@@ -25,7 +26,7 @@ export default function SkillsManager() {
   const fetchSkills = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/skills');
+      const res = await fetch(`${getApiUrl()}/skills`);
       const data = await res.json();
       setSkills(data);
     } catch (e) {
@@ -38,7 +39,7 @@ export default function SkillsManager() {
 
   const fetchTools = async () => {
     try {
-      const res = await fetch('/api/admin/tools');
+      const res = await fetch(`${getApiUrl()}/tools`);
       const data = await res.json();
       setTools(data);
     } catch (e) {
@@ -59,7 +60,7 @@ export default function SkillsManager() {
       };
       
       const method = editingSkill ? 'PUT' : 'POST';
-      const url = editingSkill ? `/api/admin/skills/${editingSkill.skill_id}` : '/api/admin/skills';
+      const url = editingSkill ? `${getApiUrl()}/skills/${editingSkill.skill_id}` : `${getApiUrl()}/skills`;
       
       const res = await fetch(url, {
         method,
@@ -82,7 +83,7 @@ export default function SkillsManager() {
   const handleDelete = async (id: string) => {
     if (!window.confirm(`Delete skill ${id}?`)) return;
     try {
-      const res = await fetch(`/api/admin/skills/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiUrl()}/skills/${id}`, { method: 'DELETE' });
       if (res.ok) {
         message.success('Deleted');
         fetchSkills();

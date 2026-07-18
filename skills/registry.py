@@ -16,9 +16,10 @@ from tools.plc_tools import plc_read, plc_write
 from tools.api_tools import abp_rest_api
 from tools.data_tools import clean_data, split_log, text_to_sql
 from tools.time_tools import get_current_time
+from tools.sandbox_tools import run_python_in_sandbox
 
 # 所有 skill 都默认挂载的基础工具（不需要在 DB 中逐一声明）
-BASE_TOOLS = [get_current_time, read_document]
+BASE_TOOLS = [get_current_time, read_document, run_python_in_sandbox]
 
 TOOL_MAP = {
     "get_current_time": get_current_time,
@@ -36,7 +37,8 @@ TOOL_MAP = {
     "abp_rest_api": abp_rest_api,
     "clean_data": clean_data,
     "split_log": split_log,
-    "text_to_sql": text_to_sql
+    "text_to_sql": text_to_sql,
+    "run_python_in_sandbox": run_python_in_sandbox
 }
 
 class SkillRegistry:

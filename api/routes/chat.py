@@ -1,6 +1,6 @@
 import asyncio
 import json
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
@@ -18,13 +18,30 @@ class ChatRequest(BaseModel):
     attachments: list = []
     thinking_depth: str = "auto"
     context_length: str = "8k"
+    use_knowledge_base: bool = False
+    permission_mode: str = "ask_always"  # ask_always, ask_risky, full_access
 
 class TranslateRequest(BaseModel):
     text: str
     target_lang: str = "中文"
 
+class ApproveRequest(BaseModel):
+    approval_id: str
+    approved: bool
+
+class GlobalApprovalManager:
+    pending_approvals = {}
+
+@router.post("/chat/approve")
+async def approve_tool(req: ApproveRequest):
+    if req.approval_id in GlobalApprovalManager.pending_approvals:
+        GlobalApprovalManager.pending_approvals[req.approval_id]["approved"] = req.approved
+        GlobalApprovalManager.pending_approvals[req.approval_id]["event"].set()
+        return {"status": "ok"}
+    raise HTTPException(status_code=404, detail="Approval request not found")
+
 @router.post("/chat/stream")
-async def chat_stream(req: ChatRequest, request: Request):
+async def chat_stream(req: ChatRequest, request: Request, background_tasks: BackgroundTasks):
     """
     SSE 流式对话接口。
     同时下发大模型的输出增量 (token) 和执行步骤的事件流 (tool_call 等)。
@@ -50,11 +67,114 @@ async def chat_stream(req: ChatRequest, request: Request):
         
         full_agent_reply = ""
         
+        if req.context_length == "128k":
+            num_ctx = 131072
+        elif req.context_length == "32k":
+            num_ctx = 32768
+        else:
+            num_ctx = 8192
+        
         try:
             logger.info("Initializing AsyncSqliteSaver...")
             async with AsyncSqliteSaver.from_conn_string("checkpoints.sqlite") as saver:
                 logger.info(f"Creating agent for skill {req.skill_id}...")
-                agent = await create_agent_for_skill(req.skill_id, checkpointer=saver)
+                sse_queue = asyncio.Queue()
+                
+                def _build_tool_wrapper(queue, mode):
+                    def wrapper(tool):
+                        original_func = getattr(tool, "func", None)
+                        original_coro = getattr(tool, "coroutine", None)
+                        
+                        async def wrapped_coro(*args, **kwargs):
+                            tool_name = tool.name
+                            needs_approval = False
+                            if tool_name in ["plc_read", "plc_write"]:
+                                needs_approval = True
+                            elif mode == "ask_always" and tool_name not in ["get_current_time"]:
+                                needs_approval = True
+                            elif mode == "ask_risky" and tool_name in ["write_file", "run_python_in_sandbox", "export_excel"]:
+                                needs_approval = True
+                                
+                            if needs_approval:
+                                approval_id = uuid.uuid4().hex
+                                event = asyncio.Event()
+                                GlobalApprovalManager.pending_approvals[approval_id] = {"event": event, "approved": False}
+                                
+                                await queue.put({
+                                    "id": uuid.uuid4().hex,
+                                    "type": "approval_request",
+                                    "data": {
+                                        "approval_id": approval_id,
+                                        "tool_name": tool_name,
+                                        "input": str(kwargs) if kwargs else str(args),
+                                        "message": f"操作需人工审批: {tool_name}"
+                                    }
+                                })
+                                
+                                await event.wait()
+                                result = GlobalApprovalManager.pending_approvals.pop(approval_id, None)
+                                if result and not result.get("approved"):
+                                    return "❌ 权限拒绝：用户驳回了此操作请求。已停止后续操作。"
+                                    
+                            if original_coro:
+                                return await original_coro(*args, **kwargs)
+                            else:
+                                loop = asyncio.get_event_loop()
+                                return await loop.run_in_executor(None, lambda: original_func(*args, **kwargs))
+                        
+                        tool.coroutine = wrapped_coro
+                        return tool
+                    return wrapper
+
+                kb_tools = []
+                if req.use_knowledge_base:
+                    from langchain_core.tools import StructuredTool
+                    from pydantic import BaseModel, Field
+                    class KBSearchArgs(BaseModel):
+                        query: str = Field(..., description="要查询的知识内容或故障现象关键词")
+                        
+                    def _search_kb(query: str) -> str:
+                        try:
+                            import api.routes.knowledge as knowledge
+                            knowledge.init_chroma()
+                            query_embedding = knowledge.embeddings.embed_query(query)
+                            results = knowledge.collection.query(
+                                query_embeddings=[query_embedding],
+                                n_results=3
+                            )
+                            retrieved_docs = results["documents"][0] if results["documents"] else []
+                            if retrieved_docs:
+                                return "【知识库搜索结果】:\n" + "\n\n".join(retrieved_docs)
+                            return "知识库中未找到相关内容。"
+                        except Exception as e:
+                            logger.error(f"RAG retrieval failed: {e}")
+                            return f"知识库检索失败: {e}"
+                            
+                    kb_tools.append(StructuredTool.from_function(
+                        func=_search_kb,
+                        name="search_knowledge_base",
+                        description="在企业内部知识库、设备手册和历史故障工单中检索相关信息。当你遇到不确定的特定设备代码、操作手册或需要查找历史经验时，调用此工具。",
+                        args_schema=KBSearchArgs
+                    ))
+
+                agent = await create_agent_for_skill(req.skill_id, checkpointer=saver, num_ctx=num_ctx, extra_tools=kb_tools, tool_wrapper=_build_tool_wrapper(sse_queue, req.permission_mode))
+                
+                trace_events = []
+                
+                # Push a session_info trace event for the frontend
+                import time
+                session_info = {
+                    "id": uuid.uuid4().hex,
+                    "type": "session_info",
+                    "timestamp": int(time.time() * 1000),
+                    "data": {
+                        "session_id": req.thread_id,
+                        "skill_id": req.skill_id,
+                        "message": "会话上下文初始化"
+                    }
+                }
+                trace_events.append(session_info)
+                await sse_queue.put(session_info)
                 
                 content_list = []
                 
@@ -72,9 +192,6 @@ async def chat_stream(req: ChatRequest, request: Request):
                 if sys_prompt:
                     content_list.append({"type": "text", "text": sys_prompt})
                 
-                if req.message:
-                    content_list.append({"type": "text", "text": req.message})
-                    
                 for url in req.attachments:
                     from pathlib import Path
                     filename = url.split("/")[-1]
@@ -83,13 +200,26 @@ async def chat_stream(req: ChatRequest, request: Request):
                         continue
                         
                     parse_event_start = {"id": uuid.uuid4().hex, "type": "tool_start", "data": {"name": "FileParser", "input": filename, "message": f"正在读取附件: {filename}"}}
-                    yield f"data: {json.dumps(parse_event_start, ensure_ascii=False)}\n\n"
+                    trace_events.append(parse_event_start)
+                    await sse_queue.put(parse_event_start)
                         
                     if any(url.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".gif", ".webp"]):
                         import base64
                         with open(local_path, "rb") as img_file:
                             encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-                        content_list.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_string}"}})
+                        
+                        mime = "image/jpeg"
+                        if url.lower().endswith(".png"): mime = "image/png"
+                        elif url.lower().endswith(".gif"): mime = "image/gif"
+                        elif url.lower().endswith(".webp"): mime = "image/webp"
+                            
+                        content_list.append({
+                            "type": "image_url", 
+                            "image_url": {
+                                "url": f"data:{mime};base64,{encoded_string}",
+                                "detail": "high"
+                            }
+                        })
                     elif url.lower().endswith(".pdf"):
                         try:
                             import PyPDF2
@@ -111,20 +241,70 @@ async def chat_stream(req: ChatRequest, request: Request):
                             logger.error(f"Failed to read PDF {filename}: {e}")
                             content_list.append({"type": "text", "text": f"\n\n[PDF附件 - {filename} 解析失败]\n"})
                     else:
-                        content_list.append({"type": "text", "text": f"\n\n[系统提示：用户上传了附件文本 '{filename}'。请使用 read_file 工具来阅读它的内容。相对路径为: uploads/{filename}]\n"})
+                        file_size = local_path.stat().st_size
+                        sys_txt = ""
+                        try:
+                            with open(local_path, "r", encoding="utf-8") as f:
+                                preview = f.read(4000)
+                            sys_txt = f"\n\n[系统提示]：用户上传了大小为 {file_size} 字节的文件 '{filename}'。以下是该文件的前 4000 个字符预览：\n\n```text\n{preview}\n...\n```\n\n请**直接基于以上文件内容**回答用户当前的提问（如“分析错误”等）。不需要任何多余的寒暄！如果你觉得信息不够，你可以自主调用 `read_document` 翻页阅读。"
+                        except Exception as e:
+                            sys_txt = f"\n\n[系统强制指令]：用户上传了大小为 {file_size} 字节的文件 '{filename}'。你**必须第一步**调用 `read_document` 工具（参数 filepath='uploads/{filename}', start_page=1, end_page=1）来读取它，不要回复任何其他说明，直接调用工具！"
+                        
+                        content_list.append({"type": "text", "text": sys_txt})
                         
                     parse_event_end = {"id": uuid.uuid4().hex, "type": "tool_end", "data": {"name": "FileParser", "output": "解析成功", "message": "附件处理完毕"}}
-                    yield f"data: {json.dumps(parse_event_end, ensure_ascii=False)}\n\n"
+                    trace_events.append(parse_event_end)
+                    await sse_queue.put(parse_event_end)
+                    
+                if req.message:
+                    has_image_attachment = any(url.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".gif", ".webp"] for url in req.attachments)
+                    if has_image_attachment:
+                        enhanced_message = f"{req.message}\n\n[系统强制指令：用户刚刚上传了一张全新的图片。请**彻底抛弃**前文中对旧图片的分析和结论，**绝对不要**把前文的选项或分析套用到本题上。请重新、仔细地审视这张最新图片的所有细节，并仅针对本次的图片回答！]"
+                        content_list.append({"type": "text", "text": enhanced_message})
+                    else:
+                        content_list.append({"type": "text", "text": req.message})
                 
-                final_content = content_list if len(content_list) > 1 else req.message
+                # 合并纯文本内容以防某些本地小模型对 list 格式理解不佳
+                has_image = any(isinstance(c, dict) and c.get("type") == "image_url" for c in content_list)
+                if not has_image and content_list:
+                    final_text = ""
+                    for c in content_list:
+                        final_text += c.get("text", "") + "\n"
+                    final_content = final_text.strip()
+                else:
+                    final_content = content_list
                 inputs = {"messages": [HumanMessage(content=final_content)]}
-                logger.info("Starting astream_events...")
-                async for event in agent.astream_events(inputs, config=config, version="v2"):
+                
+                async def run_agent():
+                    try:
+                        async for event in agent.astream_events(inputs, config=config, version="v2"):
+                            await sse_queue.put(event)
+                    except Exception as e:
+                        import traceback
+                        traceback.print_exc()
+                        await sse_queue.put({"event": "error", "data": {"message": str(e)}})
+                    finally:
+                        await sse_queue.put(None)
+                
+                agent_task = asyncio.create_task(run_agent())
+                logger.info("Started agent task, consuming queue...")
+                
+                while True:
                     if await request.is_disconnected():
                         logger.warning("Client disconnected")
+                        agent_task.cancel()
                         break
                         
-                    kind = event["event"]
+                    event = await sse_queue.get()
+                    if event is None:
+                        break
+                        
+                    if "type" in event and event["type"] in ["session_info", "tool_start", "tool_end", "tool_error", "approval_request"]:
+                        # This is our custom event (e.g. from tool_wrapper or initial push)
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                        continue
+                        
+                    kind = event.get("event")
                     name = event.get("name", "")
                     
                     out_event = None
@@ -134,34 +314,77 @@ async def chat_stream(req: ChatRequest, request: Request):
                     elif kind == "on_chat_model_stream":
                         chunk = event["data"]["chunk"]
                         token = chunk.content if hasattr(chunk, "content") else str(chunk)
-                        if token:
+                        if token is not None:
                             full_agent_reply += token
                             out_event = {"id": uuid.uuid4().hex, "type": "llm_token", "data": {"token": token}}
                     elif kind == "on_chat_model_end":
                         out_event = {"id": uuid.uuid4().hex, "type": "llm_end", "data": {"message": "模型思考结束"}}
                     elif kind == "on_tool_start":
                         tool_input = event["data"].get("input", "")
-                        out_event = {"id": uuid.uuid4().hex, "type": "tool_start", "data": {"name": name, "input": str(tool_input), "message": f"正在调用工具: {name}"}}
+                        out_event = {"id": uuid.uuid4().hex, "type": "tool_start", "data": {"name": name, "input": tool_input, "message": f"正在调用工具: {name}"}}
                     elif kind == "on_tool_end":
                         tool_output = event["data"].get("output", "")
-                        out_event = {"id": uuid.uuid4().hex, "type": "tool_end", "data": {"name": name, "output": str(tool_output), "message": "工具调用完成"}}
+                        # Handle ToolMessage or other objects
+                        if hasattr(tool_output, "content"):
+                            tool_output = tool_output.content
+                        elif not isinstance(tool_output, (str, int, float, bool, list, dict, type(None))):
+                            tool_output = str(tool_output)
+                        
+                        # Intercept sandbox image outputs and render them for the user
+                        if name == "run_python_in_sandbox" and "sandbox_workspace/" in str(tool_output):
+                            import re
+                            matches = re.findall(r"sandbox_workspace/[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|PNG|JPG|JPEG)", str(tool_output))
+                            for filepath in set(matches):
+                                filename = filepath.split("/")[-1]
+                                md_image = f"\n\n![{filename}](http://localhost:8000/{filepath})\n\n"
+                                full_agent_reply += md_image
+                                img_event = {"id": uuid.uuid4().hex, "type": "llm_token", "data": {"token": md_image}}
+                                yield f"data: {json.dumps(img_event, ensure_ascii=False)}\n\n"
+                        
+                        out_event = {"id": uuid.uuid4().hex, "type": "tool_end", "data": {"name": name, "output": tool_output, "message": "工具调用完成"}}
                     elif kind == "on_tool_error":
                         error = event["data"].get("error", "")
                         out_event = {"id": uuid.uuid4().hex, "type": "tool_error", "data": {"name": name, "error": str(error), "message": "工具执行发生异常"}}
+                    elif kind == "error":
+                        # From our catch block
+                        out_event = {"id": "error", "type": "error", "data": {"message": event["data"]["message"]}}
                     
                     if out_event:
+                        if out_event["type"] not in ["llm_token", "llm_start", "llm_end"]:
+                            trace_events.append(out_event)
                         yield f"data: {json.dumps(out_event, ensure_ascii=False)}\n\n"
-                logger.info("Stream events completed normally")
+                        
+                logger.info("Stream queue empty, event_generator completed normally")
+                
+                if not full_agent_reply.strip():
+                    err_msg = "\n\n⚠️ **[系统警报] 模型输出为空。**\n这通常是因为当前的对话历史总长度**超出了当前设置的上下文窗口限制**。模型被迫截断并输出了结束符。\n\n**建议解决方案：**\n1. 在底部输入框左侧点击 `[上下文: 8K]` 切换到 **128K** 模式扩充窗口空间。\n2. 或者开启一个全新的会话（清空历史记忆）再试一次。"
+                    full_agent_reply = err_msg
+                    err_token_event = {"id": uuid.uuid4().hex, "type": "llm_token", "data": {"token": err_msg}}
+                    trace_events.append(err_token_event)
+                    yield f"data: {json.dumps(err_token_event, ensure_ascii=False)}\n\n"
                 
                 # --- Save agent message to DB ---
                 if full_agent_reply:
                     try:
                         with get_connection("database/SIDEA.db") as conn:
-                            conn.execute("INSERT INTO chat_messages (message_id, session_id, role, content) VALUES (?, ?, ?, ?)", 
-                                         (str(uuid.uuid4()), req.thread_id, "agent", full_agent_reply))
+                            conn.execute("INSERT INTO chat_messages (message_id, session_id, role, content, trace_events) VALUES (?, ?, ?, ?, ?)", 
+                                         (str(uuid.uuid4()), req.thread_id, "agent", full_agent_reply, json.dumps(trace_events, ensure_ascii=False)))
                             conn.commit()
+                            
+                        # B方案：自动触发经验提炼（如果响应较长，具备一定技术含量）
+                        if len(full_agent_reply) > 100:
+                            from api.routes.knowledge import ExtractRequest, extract_experience
+                            extraction_req = ExtractRequest(
+                                session_id=req.thread_id,
+                                message=f"用户提问: {req.message}\nAI回答: {full_agent_reply}"
+                            )
+                            # Run it in background task
+                            async def trigger_extraction():
+                                await extract_experience(extraction_req, background_tasks)
+                            # We can't await inside synchronous generator logic, wait this is an async generator.
+                            await extract_experience(extraction_req, background_tasks)
                     except Exception as e:
-                        logger.error(f"Failed to save agent message to DB: {e}")
+                        logger.error(f"Failed to save agent message to DB or auto-extract: {e}")
                         
         except Exception as e:
             import traceback
@@ -200,3 +423,32 @@ async def translate_stream(req: TranslateRequest, request: Request):
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+@router.get("/sandbox/open")
+def open_sandbox_folder(file: str = ""):
+    """Open the sandbox_workspace folder in the host OS"""
+    import os
+    import subprocess
+    import platform
+    
+    # Ensure it only opens within sandbox_workspace
+    base_dir = os.path.abspath("sandbox_workspace")
+    if file:
+        target_path = os.path.abspath(os.path.join(base_dir, file))
+        if not target_path.startswith(base_dir):
+            return {"status": "error", "message": "Invalid path"}
+        # If file doesn't exist, fallback to base_dir
+        if not os.path.exists(target_path):
+            target_path = base_dir
+    else:
+        target_path = base_dir
+        
+    try:
+        if platform.system() == "Windows":
+            os.startfile(target_path)
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", "-R", target_path] if os.path.isfile(target_path) else ["open", target_path])
+        else:
+            subprocess.Popen(["xdg-open", target_path])
+        return {"status": "success", "message": f"Opened {target_path}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

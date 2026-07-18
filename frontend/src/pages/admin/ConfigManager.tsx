@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, message } from 'antd';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Server } from 'lucide-react';
+import { getApiUrl, getBaseUrl } from '../../config';
 
 interface ConfigItem {
   config_key: string;
@@ -15,11 +16,21 @@ export default function ConfigManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form] = Form.useForm();
+  
+  const [serverUrl, setServerUrl] = useState(() => getBaseUrl());
+
+  const handleSaveServerUrl = () => {
+    localStorage.setItem('SIDEA_SERVER_URL', serverUrl);
+    message.success('API 服务地址已保存，即将刷新页面');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
 
   const fetchConfigs = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch(`${getApiUrl()}/config`);
       const data = await res.json();
       setConfigs(data);
     } catch (e) {
@@ -36,7 +47,7 @@ export default function ConfigManager() {
 
   const handleSave = async (values: any) => {
     try {
-      const res = await fetch(`/api/config/${values.config_key}`, {
+      const res = await fetch(`${getApiUrl()}/config/${values.config_key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -61,7 +72,7 @@ export default function ConfigManager() {
   const handleDelete = async (key: string) => {
     if (!window.confirm(`Delete config ${key}?`)) return;
     try {
-      const res = await fetch(`/api/config/${key}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiUrl()}/config/${key}`, { method: 'DELETE' });
       if (res.ok) {
         message.success('Deleted');
         fetchConfigs();
@@ -103,6 +114,27 @@ export default function ConfigManager() {
           setIsModalOpen(true);
         }}>Add Config</Button>
       </div>
+
+      <div className="bg-black/20 p-5 rounded-xl border border-[var(--border-color)] mb-8 flex flex-col gap-3">
+        <h3 className="text-lg font-medium text-[var(--accent-cyan)] flex items-center gap-2 m-0">
+          <Server size={18} />
+          前端直连 API 地址配置
+        </h3>
+        <p className="text-sm text-gray-400 m-0">
+          此配置保存在浏览器本地缓存中。如果您将系统部署在另一台服务器上，请在此处填写对应的地址 (例如: http://192.168.1.100:8000)。
+        </p>
+        <div className="flex gap-4 items-center">
+          <Input 
+            value={serverUrl} 
+            onChange={e => setServerUrl(e.target.value)} 
+            placeholder="http://localhost:8000"
+            className="max-w-md bg-black/40 border-gray-700 text-white"
+          />
+          <Button type="primary" onClick={handleSaveServerUrl}>保存并应用</Button>
+        </div>
+      </div>
+
+      <h3 className="text-lg font-medium text-white mb-4">系统配置 (后端数据库)</h3>
 
       <Table 
         dataSource={configs} 

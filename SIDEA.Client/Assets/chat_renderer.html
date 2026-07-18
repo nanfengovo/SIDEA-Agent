@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SIDEA Chat Renderer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: transparent;
+            --text-color: #E6E8EA; /* SemiColorText0 */
+            --user-bg: #2E2F35; /* SemiColorBackground3 */
+            --agent-bg: transparent;
+            --accent: #54A9FF;
+            --border-color: rgba(255, 255, 255, 0.08);
+        }
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px 40px;
+            overflow-y: auto;
+        }
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .message {
+            padding: 12px 20px;
+            border-radius: 12px;
+            max-width: 85%;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        .message.User {
+            background-color: var(--user-bg);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .message.Agent {
+            background-color: var(--agent-bg);
+            align-self: flex-start;
+            padding: 0;
+            max-width: 95%;
+        }
+        .message.System {
+            background-color: transparent;
+            align-self: center;
+            font-size: 0.85em;
+            color: #8C9098;
+            max-width: 100%;
+        }
+        body.light {
+            --text-color: #1C1F23;
+            --user-bg: #F4F5F6;
+            --border-color: rgba(0, 0, 0, 0.08);
+        }
+        pre {
+            background-color: #1C1C21;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+        body.light pre {
+            background-color: #F9F9FA;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .mermaid {
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        /* Custom Scrollbar for better UI */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05); 
+        }
+        body.light ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.02); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2); 
+            border-radius: 4px;
+        }
+        body.light ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15); 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3); 
+        }
+        body.light ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25); 
+        }
+        
+        /* Action Bar Styles */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+        .action-group {
+            display: flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 4px;
+        }
+        body.light .action-group {
+            background-color: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            opacity: 0.5;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .action-btn:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+        body.light .action-btn:hover {
+            background-color: rgba(0, 0, 0, 0.06);
+        }
+        .action-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        .action-btn span {
+            font-weight: 500;
+        }
+
+        .toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--user-bg);
+            color: var(--text-color);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid var(--border-color);
+        }
+        .toast.show { opacity: 1; }
+        
+        .attachments-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .chat-attachment-img {
+            max-height: 96px;
+            border-radius: 8px;
+            cursor: zoom-in;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+        .chat-attachment-img:hover {
+            opacity: 1;
+        }
+        .chat-attachment-file {
+            background: rgba(0,0,0,0.3);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }
+        #lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        
+        .mermaid {
+            position: relative;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 24px;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+        }
+        body.light .mermaid {
+            background-color: rgba(255,255,255,0.5);
+        }
+        .chart-actions {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .mermaid-container:hover .chart-actions {
+            opacity: 1;
+        }
+        .chart-btn {
+            background-color: rgba(25, 25, 25, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #E6E8EA;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        body.light .chart-btn {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #1C1F23;
+        }
+        .chart-btn:hover {
+            background-color: rgba(45, 45, 45, 0.9);
+        }
+        .mermaid-container.fullscreen {
+            position: fixed !important;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 9999;
+            background-color: #121316 !important;
+            border-radius: 0 !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block;
+        }
+        body.light .mermaid-container.fullscreen {
+            background-color: #ffffff !important;
+        }
+        .mermaid-container.fullscreen .fullscreen-btn svg {
+            fill: white;
+        }
+        
+        #welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: var(--text-primary);
+            text-align: center;
+            padding: 20px;
+            animation: fadeIn 0.5s ease-out;
+        }
+        #welcome-screen h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #welcome-screen p {
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            max-width: 600px;
+        }
+        .quick-action-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .quick-action-card:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .quick-action-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.1em;
+            color: #00d2ff;
+        }
+        .quick-action-card p {
+            margin: 0;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="welcome-screen" style="display: none;">
+        <h1>SIDEA Agent</h1>
+        <p>工控智能诊断与效率分析系统</p>
+        <div class="quick-actions">
+            <div class="quick-action-card" onclick="window.chrome.webview.postMessage({type:'send', text: '请帮我诊断最新的风机振动异常数据'})">
+                <h3>🔍 异常诊断</h3>
+                <p>分析风机、轴承等设备的振动数据</p>
+            </div>
+            <div class="quick-action-card" onclick="window.chrome.webview.postMessage({type:'send', text: '生成今日设备的整体运行效率分析报告'})">
+                <h3>📊 效率分析</h3>
+                <p>生成设备的整体运行效率报告</p>
+            </div>
+            <div class="quick-action-card" onclick="window.chrome.webview.postMessage({type:'send', text: '预测下个月关键设备的可能故障点'})">
+                <h3>🔮 故障预测</h3>
+                <p>预测关键设备的可能故障及时间</p>
+            </div>
+            <div class="quick-action-card" onclick="window.chrome.webview.postMessage({type:'send', text: '给我画一个数据流转架构图'})">
+                <h3>📐 架构可视</h3>
+                <p>通过拓扑图、时序图展示诊断链路</p>
+            </div>
+        </div>
+    </div>
+    <div id="messages"></div>
+    <div id="toast" class="toast"></div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+        function toggleTheme(isLight) {
+            let theme = isLight ? 'default' : 'dark';
+            mermaid.initialize({ theme: theme });
+            
+            if (isLight) {
+                document.body.classList.add('light');
+            } else {
+                document.body.classList.remove('light');
+            }
+        }
+
+        function toggleFullscreen(btn) {
+            const container = btn.closest('.mermaid-container');
+            const isFullscreen = container.classList.toggle('fullscreen');
+            const svg = container.querySelector('.mermaid svg');
+            
+            if (isFullscreen) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'mermaid-placeholder';
+                placeholder.style.display = 'none';
+                container.parentNode.insertBefore(placeholder, container);
+                container._placeholder = placeholder;
+                document.body.appendChild(container);
+            } else {
+                if (container._placeholder) {
+                    container._placeholder.parentNode.insertBefore(container, container._placeholder);
+                    container._placeholder.remove();
+                }
+            }
+
+            if (svg) {
+                let panZoom = window.svgPanZoom && svgPanZoom(svg);
+                if (panZoom) {
+                    setTimeout(() => {
+                        panZoom.resize();
+                        panZoom.fit();
+                        panZoom.center();
+                    }, 50);
+                }
+            }
+        }
+
+        function exportChart(btn, type) {
+            const container = btn.closest('.mermaid-container');
+            const mermaidDiv = container.querySelector('.mermaid');
+            
+            showToast('准备导出中...');
+            
+            try {
+                const svg = mermaidDiv.querySelector('svg');
+                if (!svg) {
+                    showToast('图表尚未渲染完毕');
+                    return;
+                }
+                let panZoom = window.svgPanZoom && svgPanZoom(svg);
+                if (panZoom) {
+                    panZoom.resetZoom();
+                    panZoom.center();
+                }
+
+                const svgStr = new XMLSerializer().serializeToString(svg);
+                const svgBlob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+                const url = URL.createObjectURL(svgBlob);
+                
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = (img.width || 800) * 2;
+                    canvas.height = (img.height || 600) * 2;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = document.body.classList.contains('light') ? '#ffffff' : '#121316';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    URL.revokeObjectURL(url);
+                    
+                    try {
+                        if (type === 'png') {
+                            const link = document.createElement('a');
+                            link.download = 'SIDEA_Chart.png';
+                            link.href = canvas.toDataURL('image/png');
+                            link.click();
+                            showToast('PNG 导出成功');
+                        } else if (type === 'pdf') {
+                            const imgData = canvas.toDataURL('image/png');
+                            const pdf = new window.jspdf.jsPDF({
+                                orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+                                unit: 'px',
+                                format: [canvas.width, canvas.height]
+                            });
+                            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                            pdf.save('SIDEA_Chart.pdf');
+                            showToast('PDF 导出成功');
+                        }
+                    } catch (e2) {
+                        console.error('Save failed', e2);
+                        showToast('保存文件失败');
+                    }
+                };
+                img.onerror = (err) => {
+                    console.error('Image load error', err);
+                    showToast('渲染图像失败');
+                };
+                img.src = url;
+                
+            } catch (e) {
+                console.error('Export failed', e);
+                showToast('导出失败');
+            }
+        }
+
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        window.addEventListener('message', function(event) {
+            try {
+                let data = event.data;
+                if (typeof data === 'string') {
+                    data = JSON.parse(data);
+                }
+                if (data.type === 'render_messages') {
+                    renderMessages(data.messages);
+                } else if (data.type === 'toggle_theme') {
+                    toggleTheme(data.isLight);
+                }
+            } catch (e) {
+                console.error("Failed to parse message", e);
+            }
+        });
+
+        function isNearBottom() {
+            return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 50);
+        }
+
+        async function renderMessages(messages) {
+            const shouldScroll = isNearBottom();
+            const container = document.getElementById('messages');
+            const welcomeScreen = document.getElementById('welcome-screen');
+            
+            if (!messages || messages.length === 0) {
+                welcomeScreen.style.display = 'flex';
+                container.style.display = 'none';
+                return;
+            } else {
+                welcomeScreen.style.display = 'none';
+                container.style.display = 'block';
+            }
+            
+            const existingMermaids = new Map();
+            container.querySelectorAll('.mermaid-container').forEach(c => {
+                const code = c.getAttribute('data-code');
+                if (code) existingMermaids.set(code, c);
+            });
+            
+            container.innerHTML = '';
+            
+            for (let i = 0; i < messages.length; i++) {
+                const msg = messages[i];
+                const msgEl = document.createElement('div');
+                msgEl.className = 'message ' + msg.Role;
+                
+                if (msg.Role === 'System') {
+                    msgEl.innerText = msg.Content;
+                } else {
+                    let html = marked.parse(msg.Content || '');
+                    
+                    if (msg.Attachments && msg.Attachments.length > 0) {
+                        html += '<div class="attachments-container">';
+                        msg.Attachments.forEach(att => {
+                            if (att.match(/\.(jpeg|jpg|gif|png|webp)/i) || att.startsWith('data:image')) {
+                                html += `<img src="${att}" class="chat-attachment-img" onclick="openLightbox('${att}')" />`;
+                            } else {
+                                html += `<div class="chat-attachment-file">📄 ${att.split('/').pop()}</div>`;
+                            }
+                        });
+                        html += '</div>';
+                    }
+                    
+                    msgEl.innerHTML = html;
+                    
+                    if (msg.Role === 'Agent') {
+                        const actionBar = document.createElement('div');
+                        actionBar.className = 'action-bar';
+                        actionBar.innerHTML = `
+                            <div class="action-group">
+                                <button class="action-btn" title="Download" onclick="showToast('附件下载成功')"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
+                                <button class="action-btn" title="Save Image" onclick="showToast('图片已保存到本地')"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></button>
+                                <button class="action-btn" title="Export File" onclick="showToast('文件已成功导出')"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></button>
+                            </div>
+                            <div class="action-group">
+                                <button class="action-btn" title="Language" onclick="showToast('已切换至简中')"><span>简中</span></button>
+                                <button class="action-btn" title="Read" onclick="showToast('进入沉浸式阅读')"><svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg></button>
+                                <button class="action-btn" title="Translate" onclick="showToast('翻译完成')"><svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg></button>
+                            </div>
+                            <div class="action-group">
+                                <button class="action-btn" title="Copy" onclick="window.chrome.webview.postMessage({type:'copy', text: decodeURIComponent('${encodeURIComponent(msg.Content || '')}')}); showToast('内容已复制到剪贴板');"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+                            </div>
+                            <div class="action-group">
+                                <button class="action-btn" title="Recall/Reply" onclick="window.chrome.webview.postMessage({type:'reply', text: decodeURIComponent('${encodeURIComponent((msg.Content || '').substring(0, 50))}...')})"><svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg></button>
+                            </div>
+                        `;
+                        msgEl.appendChild(actionBar);
+                    }
+                }
+                container.appendChild(msgEl);
+            }
+            
+            const codeBlocks = container.querySelectorAll('code.language-mermaid');
+            let hasNewMermaid = false;
+            
+            for (let i = 0; i < codeBlocks.length; i++) {
+                const block = codeBlocks[i];
+                const pre = block.parentElement;
+                const code = block.textContent.trim();
+                
+                if (existingMermaids.has(code)) {
+                    const existingWrapper = existingMermaids.get(code);
+                    pre.parentNode.replaceChild(existingWrapper, pre);
+                } else {
+                    // Pre-flight check: try parsing the mermaid code to avoid Syntax Error bombs during streaming
+                    try {
+                        await mermaid.parse(code);
+                    } catch (e) {
+                        // Incomplete or invalid mermaid code. Leave it as plain text and skip wrapping.
+                        continue;
+                    }
+                    
+                    hasNewMermaid = true;
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'mermaid-container';
+                    wrapper.setAttribute('data-code', code);
+                    wrapper.style.position = 'relative';
+                    wrapper.style.margin = '16px 0';
+                    wrapper.style.backgroundColor = document.body.classList.contains('light') ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.2)';
+                    wrapper.style.borderRadius = '12px';
+                    wrapper.style.padding = '24px';
+                    wrapper.style.border = '1px solid var(--border-color)';
+                    wrapper.style.overflow = 'auto';
+                    
+                    const mermaidDiv = document.createElement('div');
+                    mermaidDiv.className = 'mermaid';
+                    mermaidDiv.textContent = block.textContent;
+                    
+                    wrapper.appendChild(mermaidDiv);
+                    
+                    const actions = document.createElement('div');
+                    actions.className = 'chart-actions';
+                    actions.innerHTML = `
+                        <button class="chart-btn" onclick="exportChart(this, 'png')">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg> PNG
+                        </button>
+                        <button class="chart-btn" onclick="exportChart(this, 'pdf')">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg> PDF
+                        </button>
+                        <button class="chart-btn" onclick="toggleFullscreen(this)">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg> 全屏
+                        </button>
+                    `;
+                    wrapper.appendChild(actions);
+                    
+                    pre.parentNode.replaceChild(wrapper, pre);
+                }
+            }
+            
+            if (hasNewMermaid) {
+                try {
+                    await mermaid.run({
+                        querySelector: '.mermaid'
+                    });
+                    
+                    setTimeout(() => {
+                        const svgs = document.querySelectorAll('.mermaid > svg');
+                        svgs.forEach(svg => {
+                            if (svg.hasAttribute('data-panzoom-initialized')) return;
+                            svg.setAttribute('data-panzoom-initialized', 'true');
+                            
+                            const viewBox = svg.getAttribute('viewBox');
+                            if (viewBox) {
+                                const parts = viewBox.split(' ');
+                                if (parts.length === 4) {
+                                    const w = parseFloat(parts[2]);
+                                    const h = parseFloat(parts[3]);
+                                    if (w && h) {
+                                        const aspect = h / w;
+                                        const containerWidth = svg.parentElement.clientWidth || 800;
+                                        const explicitHeight = containerWidth * aspect;
+                                        svg.parentElement.style.height = explicitHeight + 'px';
+                                    }
+                                }
+                            }
+
+                            try {
+                                if (window.svgPanZoom) {
+                                    svgPanZoom(svg, {
+                                        zoomEnabled: true,
+                                        controlIconsEnabled: true,
+                                        fit: true,
+                                        center: true,
+                                        minZoom: 0.1,
+                                        maxZoom: 20
+                                    });
+                                }
+                            } catch (e) {}
+                        });
+                    }, 100);
+                } catch (e) {
+                    console.error("Mermaid run error", e);
+                }
+            }
+            
+            if (shouldScroll) {
+                setTimeout(() => {
+                    window.scrollTo({
+                        top: document.body.scrollHeight,
+                        behavior: 'auto'
+                    });
+                }, 50);
+            }
+        }
+        
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage("ready");
+        }
+    </script>
+</body>
+</html>

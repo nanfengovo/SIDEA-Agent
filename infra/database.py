@@ -1,9 +1,11 @@
+from contextlib import contextmanager
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 
 # 获取相对于当前文件的配置根目录
 # 使用这个防止运行脚本路径不同导致找不到db文件
+@contextmanager
 def get_connection(db_path: str = "config.db") -> sqlite3.Connection:
     """
     获取数据库连接，设置 row_factory 以便按列名访问
@@ -16,9 +18,12 @@ def get_connection(db_path: str = "config.db") -> sqlite3.Connection:
         
     actual_path.parent.mkdir(parents=True, exist_ok=True)
     
-    conn = sqlite3.connect(actual_path)
+    conn = sqlite3.connect(actual_path, timeout=10.0)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db(db_path: str = "config.db"):
     """
@@ -87,6 +92,31 @@ def init_db(db_path: str = "config.db"):
             FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
         );
         """)
+        
+        # 表 6: kb_documents
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS kb_documents (
+            doc_id        TEXT PRIMARY KEY,
+            filename      TEXT NOT NULL,
+            file_type     TEXT NOT NULL,
+            file_size     INTEGER DEFAULT 0,
+            chunk_count   INTEGER DEFAULT 0,
+            status        TEXT DEFAULT 'processing',
+            created_at    TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
+        # 表 7: kb_experience_queue
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS kb_experience_queue (
+            id            TEXT PRIMARY KEY,
+            session_id    TEXT,
+            content       TEXT NOT NULL,
+            extracted_rule TEXT NOT NULL,
+            status        TEXT DEFAULT 'pending', -- pending, approved, rejected
+            created_at    TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
 
         conn.commit()
     print("SQLite database initialized successfully (v3.0)")
@@ -147,7 +177,7 @@ def seed_default_skills(db_path: str = "config.db"):
             "skill_name": "PLC 故障诊断专家",
             "description": "分析 PLC 连接异常、通信故障、控制器报错",
             "template_path": "skills/templates/plc_diagnostics.md",
-            "bound_tools": '["read_plc_log", "read_alarm_log", "plc_read", "plc_write"]',
+            "bound_tools": '["read_plc_log", "read_alarm_log", "plc_read", "plc_write", "read_document"]',
             "temperature": 0.1,
             "sort_order": 1,
         },
@@ -217,13 +247,13 @@ if __name__ == "__main__":
     seed_default_skills("config.db")
     
     # 打印测试
-    conn = get_connection("config.db")
-    rows = conn.execute("SELECT config_key, config_value FROM sys_config").fetchall()
-    print("\\n=== Configs ===")
-    for r in rows:
-        print(f"  {r['config_key']} = {r['config_value']}")
-        
-    rows = conn.execute("SELECT skill_id, skill_name, is_enabled FROM skills").fetchall()
-    print("\\n=== Skills ===")
-    for r in rows:
-        print(f"  {r['skill_id']}: {r['skill_name']} (enabled={r['is_enabled']})")
+    with get_connection("config.db") as conn:
+        rows = conn.execute("SELECT config_key, config_value FROM sys_config").fetchall()
+        print("\n=== Configs ===")
+        for r in rows:
+            print(f"  {r['config_key']} = {r['config_value']}")
+            
+        rows = conn.execute("SELECT skill_id, skill_name, is_enabled FROM skills").fetchall()
+        print("\n=== Skills ===")
+        for r in rows:
+            print(f"  {r['skill_id']}: {r['skill_name']} (enabled={r['is_enabled']})")

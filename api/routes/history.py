@@ -16,6 +16,7 @@ class ChatMessage(BaseModel):
     session_id: str
     role: str
     content: str
+    trace_events: Optional[str] = None
     created_at: str
 
 @router.get("/history/sessions", response_model=List[ChatSession])
@@ -33,7 +34,7 @@ def get_messages(session_id: str):
     """获取指定会话的历史记录"""
     try:
         with get_connection("database/SIDEA.db") as conn:
-            rows = conn.execute("SELECT message_id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC", (session_id,)).fetchall()
+            rows = conn.execute("SELECT message_id, session_id, role, content, trace_events, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC", (session_id,)).fetchall()
             return [ChatMessage(**dict(r)) for r in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
