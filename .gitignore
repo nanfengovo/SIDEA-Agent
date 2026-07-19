@@ -45,6 +45,10 @@ data/
 backend.log
 server.log
 
+# Local scratch / ad-hoc debug scripts
+test_middleware.py
+test_wrapper.py
+
 # Keep README media tracked
 !docs/screenshots/
 !docs/screenshots/**
