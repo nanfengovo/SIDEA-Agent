@@ -1,9 +1,50 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.sqlite
+*.sqlite3
+
+# Runtime data
+config.db
+database/*.db
+database/chroma_db/
+database/models/
 logs/
 uploads/
-.DS_Store
+output/
+sandbox_workspace/*
+!sandbox_workspace/.gitkeep
+!sandbox_workspace/sidea_sdk.py
+!sandbox_workspace/main.py
+!sandbox_workspace/demo_amr_dashboard.json
+
+# Node / frontend
 frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Desktop
 SIDEA.Client/bin/
 SIDEA.Client/obj/
+
+# Docker
+data/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
+backend.log
+server.log
+
+# Keep README media tracked
+!docs/screenshots/
+!docs/screenshots/**
