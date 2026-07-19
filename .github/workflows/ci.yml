@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, vibe]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run smoke tests
+        run: pytest -q
+      - name: Generate AMR demo artifact
+        run: python scripts/demo_amr.py --out sandbox_workspace/demo_amr_dashboard.json
+      - name: Validate demo JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("sandbox_workspace/demo_amr_dashboard.json").read_text())
+          assert p["type"] == "dashboard"
+          assert len(p["panels"]) >= 4
+          print("demo ok", len(p["panels"]))
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          VITE_BASE_URL: http://localhost:8000

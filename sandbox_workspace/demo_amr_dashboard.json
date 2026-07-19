@@ -1,0 +1,1230 @@
+{
+  "type": "dashboard",
+  "title": "T_DASH_TITLE",
+  "layout": "3x2",
+  "i18n": {
+    "zh-CN": {
+      "T_DASH_TITLE": "RCS AMR 任务执行监控大屏",
+      "T_P0": "AMR 厂区实时仿真地图",
+      "T_P1": "任务效率与自动化率",
+      "T_P1_Y0": "任务完成数",
+      "T_P1_Y1": "自动化率",
+      "T_P1_S0": "任务完成数",
+      "T_P1_S1": "自动化率",
+      "T_P1_S2": "稼动率",
+      "T_P2": "机器人状态分布",
+      "T_P2_N0": "执行中",
+      "T_P2_N1": "空闲",
+      "T_P2_N2": "充电",
+      "T_P2_N3": "故障",
+      "T_P3": "库区负载三维视图",
+      "T_P4": "今日任务执行统计",
+      "T_P4_Y": "bar"
+    },
+    "en": {
+      "T_DASH_TITLE": "RCS AMR Mission Execution Dashboard",
+      "T_P0": "AMR Live Floor Simulation",
+      "T_P1": "Task Efficiency & Automation",
+      "T_P1_Y0": "Tasks Done",
+      "T_P1_Y1": "Automation %",
+      "T_P1_S0": "Tasks Done",
+      "T_P1_S1": "Automation %",
+      "T_P1_S2": "OEE %",
+      "T_P2": "Robot Status Distribution",
+      "T_P2_N0": "Busy",
+      "T_P2_N1": "Idle",
+      "T_P2_N2": "Charging",
+      "T_P2_N3": "Fault",
+      "T_P3": "Warehouse Load 3D",
+      "T_P4": "Today Mission Stats",
+      "T_P4_Y": "bar"
+    }
+  },
+  "panels": [
+    {
+      "id": "floor",
+      "title": "T_P0",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": {
+          "left": 12,
+          "right": 12,
+          "top": 44,
+          "bottom": 12,
+          "borderColor": "#22d3ee",
+          "borderWidth": 1,
+          "show": true
+        },
+        "tooltip": {
+          "trigger": "item"
+        },
+        "legend": {
+          "top": 10,
+          "right": 12,
+          "data": [
+            "正常",
+            "暂停",
+            "故障"
+          ],
+          "textStyle": {
+            "color": "#94a3b8",
+            "fontSize": 11
+          }
+        },
+        "xAxis": {
+          "type": "value",
+          "min": 0,
+          "max": 100.0,
+          "show": false,
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "axisLabel": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "type": "value",
+          "min": 0,
+          "max": 60.0,
+          "show": false,
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "axisLabel": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "series": [
+          {
+            "name": "分区",
+            "type": "scatter",
+            "data": [],
+            "silent": true,
+            "markArea": {
+              "silent": true,
+              "data": [
+                [
+                  {
+                    "name": "制证区 A",
+                    "xAxis": 2,
+                    "yAxis": 2,
+                    "itemStyle": {
+                      "color": "rgba(34,211,238,0.08)",
+                      "borderColor": "#22d3ee",
+                      "borderWidth": 1
+                    },
+                    "label": {
+                      "show": true,
+                      "position": "insideTopLeft",
+                      "color": "#22d3ee",
+                      "fontSize": 11
+                    }
+                  },
+                  {
+                    "xAxis": 30,
+                    "yAxis": 58
+                  }
+                ],
+                [
+                  {
+                    "name": "辊道区 B",
+                    "xAxis": 34,
+                    "yAxis": 2,
+                    "itemStyle": {
+                      "color": "rgba(59,130,246,0.08)",
+                      "borderColor": "#3b82f6",
+                      "borderWidth": 1
+                    },
+                    "label": {
+                      "show": true,
+                      "position": "insideTopLeft",
+                      "color": "#3b82f6",
+                      "fontSize": 11
+                    }
+                  },
+                  {
+                    "xAxis": 62,
+                    "yAxis": 58
+                  }
+                ],
+                [
+                  {
+                    "name": "AGV 充电 C",
+                    "xAxis": 66,
+                    "yAxis": 32,
+                    "itemStyle": {
+                      "color": "rgba(16,185,129,0.08)",
+                      "borderColor": "#10b981",
+                      "borderWidth": 1
+                    },
+                    "label": {
+                      "show": true,
+                      "position": "insideTopLeft",
+                      "color": "#10b981",
+                      "fontSize": 11
+                    }
+                  },
+                  {
+                    "xAxis": 98,
+                    "yAxis": 58
+                  }
+                ],
+                [
+                  {
+                    "name": "成品缓存 D",
+                    "xAxis": 66,
+                    "yAxis": 2,
+                    "itemStyle": {
+                      "color": "rgba(168,85,247,0.08)",
+                      "borderColor": "#a855f7",
+                      "borderWidth": 1
+                    },
+                    "label": {
+                      "show": true,
+                      "position": "insideTopLeft",
+                      "color": "#a855f7",
+                      "fontSize": 11
+                    }
+                  },
+                  {
+                    "xAxis": 98,
+                    "yAxis": 30
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "name": "运输路径",
+            "type": "lines",
+            "coordinateSystem": "cartesian2d",
+            "data": [
+              {
+                "coords": [
+                  [
+                    8,
+                    46
+                  ],
+                  [
+                    30,
+                    40
+                  ],
+                  [
+                    48,
+                    44
+                  ],
+                  [
+                    82,
+                    24
+                  ]
+                ]
+              },
+              {
+                "coords": [
+                  [
+                    8,
+                    20
+                  ],
+                  [
+                    34,
+                    24
+                  ],
+                  [
+                    62,
+                    20
+                  ],
+                  [
+                    82,
+                    16
+                  ]
+                ]
+              },
+              {
+                "coords": [
+                  [
+                    22,
+                    46
+                  ],
+                  [
+                    40,
+                    50
+                  ],
+                  [
+                    66,
+                    44
+                  ]
+                ]
+              }
+            ],
+            "polyline": true,
+            "silent": true,
+            "lineStyle": {
+              "color": "#22d3ee",
+              "width": 1,
+              "opacity": 0.35,
+              "curveness": 0.1
+            },
+            "effect": {
+              "show": true,
+              "period": 5,
+              "trailLength": 0.4,
+              "symbol": "arrow",
+              "symbolSize": 6,
+              "color": "#67e8f9"
+            },
+            "z": 2
+          },
+          {
+            "name": "设备",
+            "type": "scatter",
+            "symbol": "rect",
+            "symbolSize": 14,
+            "data": [
+              {
+                "value": [
+                  8,
+                  46
+                ],
+                "name": "制证机-1"
+              },
+              {
+                "value": [
+                  8,
+                  20
+                ],
+                "name": "制证机-2"
+              },
+              {
+                "value": [
+                  22,
+                  46
+                ],
+                "name": "制证机-3"
+              },
+              {
+                "value": [
+                  48,
+                  44
+                ],
+                "name": "辊道-A"
+              },
+              {
+                "value": [
+                  48,
+                  16
+                ],
+                "name": "辊道-B"
+              },
+              {
+                "value": [
+                  82,
+                  20
+                ],
+                "name": "缓存架-1"
+              }
+            ],
+            "z": 3,
+            "itemStyle": {
+              "color": "rgba(59,130,246,0.85)",
+              "borderColor": "#93c5fd",
+              "borderWidth": 1
+            },
+            "label": {
+              "show": true,
+              "position": "bottom",
+              "color": "#93c5fd",
+              "fontSize": 9,
+              "formatter": "{b}"
+            }
+          },
+          {
+            "name": "正常",
+            "type": "effectScatter",
+            "symbolSize": 12,
+            "data": [
+              {
+                "value": [
+                  62.8,
+                  5.3
+                ],
+                "name": "M35 70%"
+              },
+              {
+                "value": [
+                  66.3,
+                  50.4
+                ],
+                "name": "M37 46%"
+              },
+              {
+                "value": [
+                  25.4,
+                  35.3
+                ],
+                "name": "M39 60%"
+              },
+              {
+                "value": [
+                  69.9,
+                  40.5
+                ],
+                "name": "M40 88%"
+              },
+              {
+                "value": [
+                  73.8,
+                  12.3
+                ],
+                "name": "M42 89%"
+              },
+              {
+                "value": [
+                  35.3,
+                  12.1
+                ],
+                "name": "M43 78%"
+              }
+            ],
+            "z": 5,
+            "rippleEffect": {
+              "scale": 2.4,
+              "brushType": "stroke"
+            },
+            "itemStyle": {
+              "color": "#10b981",
+              "shadowBlur": 8,
+              "shadowColor": "#10b981"
+            },
+            "label": {
+              "show": true,
+              "position": "top",
+              "color": "#d1fae5",
+              "fontSize": 9,
+              "formatter": "{b}"
+            }
+          },
+          {
+            "name": "暂停",
+            "type": "effectScatter",
+            "symbolSize": 12,
+            "data": [
+              {
+                "value": [
+                  26.5,
+                  11.3
+                ],
+                "name": "M36 48%"
+              },
+              {
+                "value": [
+                  24.3,
+                  34.6
+                ],
+                "name": "M41 35%"
+              }
+            ],
+            "z": 5,
+            "rippleEffect": {
+              "scale": 2.6,
+              "brushType": "stroke"
+            },
+            "itemStyle": {
+              "color": "#f59e0b",
+              "shadowBlur": 8,
+              "shadowColor": "#f59e0b"
+            },
+            "label": {
+              "show": true,
+              "position": "top",
+              "color": "#fef3c7",
+              "fontSize": 9,
+              "formatter": "{b}"
+            }
+          },
+          {
+            "name": "故障",
+            "type": "effectScatter",
+            "symbolSize": 14,
+            "data": [
+              {
+                "value": [
+                  58.3,
+                  5.7
+                ],
+                "name": "M38 11%"
+              }
+            ],
+            "z": 6,
+            "rippleEffect": {
+              "scale": 3.2,
+              "brushType": "stroke"
+            },
+            "itemStyle": {
+              "color": "#ef4444",
+              "shadowBlur": 12,
+              "shadowColor": "#ef4444"
+            },
+            "label": {
+              "show": true,
+              "position": "top",
+              "color": "#fee2e2",
+              "fontSize": 10,
+              "fontWeight": "bold",
+              "formatter": "{b}"
+            }
+          }
+        ],
+        "title": {
+          "text": "T_P0",
+          "left": "center",
+          "top": 8,
+          "textStyle": {
+            "color": "#e2e8f0",
+            "fontSize": 13
+          }
+        }
+      }
+    },
+    {
+      "id": "oee",
+      "title": "T_P1",
+      "option": {
+        "backgroundColor": "transparent",
+        "title": {
+          "text": "T_P1",
+          "left": "center",
+          "top": 8,
+          "textStyle": {
+            "color": "#e2e8f0",
+            "fontSize": 13
+          }
+        },
+        "tooltip": {
+          "trigger": "axis",
+          "axisPointer": {
+            "type": "cross"
+          }
+        },
+        "legend": {
+          "data": [
+            "T_P1_S0",
+            "T_P1_S1",
+            "T_P1_S2"
+          ],
+          "top": 32,
+          "textStyle": {
+            "color": "#94a3b8",
+            "fontSize": 11
+          }
+        },
+        "grid": {
+          "top": 72,
+          "left": "10%",
+          "right": "12%",
+          "bottom": "12%",
+          "containLabel": true
+        },
+        "xAxis": {
+          "type": "category",
+          "data": [
+            "08:00",
+            "09:00",
+            "10:00",
+            "11:00",
+            "12:00",
+            "13:00"
+          ],
+          "axisLabel": {
+            "color": "#94a3b8"
+          },
+          "axisLine": {
+            "lineStyle": {
+              "color": "#334155"
+            }
+          }
+        },
+        "yAxis": [
+          {
+            "type": "value",
+            "name": "T_P1_Y0",
+            "position": "left",
+            "axisLabel": {
+              "color": "#22d3ee"
+            },
+            "nameTextStyle": {
+              "color": "#22d3ee"
+            },
+            "splitLine": {
+              "lineStyle": {
+                "color": "rgba(148,163,184,0.12)"
+              }
+            }
+          },
+          {
+            "type": "value",
+            "name": "T_P1_Y1",
+            "position": "right",
+            "axisLabel": {
+              "color": "#f97316"
+            },
+            "nameTextStyle": {
+              "color": "#f97316"
+            },
+            "splitLine": {
+              "show": false
+            }
+          }
+        ],
+        "series": [
+          {
+            "name": "T_P1_S0",
+            "type": "bar",
+            "yAxisIndex": 0,
+            "data": [
+              38,
+              65,
+              72,
+              49,
+              38,
+              38
+            ],
+            "smooth": false,
+            "itemStyle": {
+              "color": "#22d3ee"
+            }
+          },
+          {
+            "name": "T_P1_S1",
+            "type": "line",
+            "yAxisIndex": 1,
+            "data": [
+              70.5,
+              72.2,
+              73.4,
+              76.1,
+              78.5,
+              81.9
+            ],
+            "smooth": true,
+            "itemStyle": {
+              "color": "#f97316"
+            }
+          },
+          {
+            "name": "T_P1_S2",
+            "type": "line",
+            "yAxisIndex": 1,
+            "data": [
+              61.0,
+              61.9,
+              63.0,
+              67.1,
+              67.3,
+              70.3
+            ],
+            "smooth": true,
+            "itemStyle": {
+              "color": "#f97316"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "status",
+      "title": "T_P2",
+      "option": {
+        "backgroundColor": "transparent",
+        "title": {
+          "text": "T_P2",
+          "left": "center",
+          "top": 8,
+          "textStyle": {
+            "color": "#e2e8f0",
+            "fontSize": 13
+          }
+        },
+        "tooltip": {
+          "trigger": "item",
+          "formatter": "{b}: {c} ({d}%)"
+        },
+        "legend": {
+          "orient": "vertical",
+          "right": 8,
+          "top": "middle",
+          "type": "plain",
+          "textStyle": {
+            "color": "#94a3b8",
+            "fontSize": 11
+          }
+        },
+        "series": [
+          {
+            "name": "T_P2",
+            "type": "pie",
+            "radius": [
+              "36%",
+              "58%"
+            ],
+            "center": [
+              "40%",
+              "56%"
+            ],
+            "avoidLabelOverlap": true,
+            "minAngle": 3,
+            "itemStyle": {
+              "borderRadius": 6,
+              "borderColor": "#0f172a",
+              "borderWidth": 2,
+              "shadowBlur": 18,
+              "shadowColor": "rgba(34,211,238,0.35)"
+            },
+            "label": {
+              "position": "inside",
+              "formatter": "{d}%",
+              "fontSize": 10,
+              "color": "#fff",
+              "textShadowColor": "rgba(0,0,0,0.6)",
+              "textShadowBlur": 4
+            },
+            "labelLine": {
+              "show": false
+            },
+            "data": [
+              {
+                "name": "T_P2_N0",
+                "value": 35.0
+              },
+              {
+                "name": "T_P2_N1",
+                "value": 8.0
+              },
+              {
+                "name": "T_P2_N2",
+                "value": 5.0
+              },
+              {
+                "name": "T_P2_N3",
+                "value": 4.0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "load3d",
+      "title": "T_P3",
+      "option": {
+        "backgroundColor": "transparent",
+        "title": {
+          "text": "T_P3",
+          "left": "center",
+          "top": 8,
+          "textStyle": {
+            "color": "#e2e8f0",
+            "fontSize": 13
+          }
+        },
+        "tooltip": {},
+        "visualMap": {
+          "max": 81.7,
+          "min": 0.1,
+          "inRange": {
+            "color": [
+              "#0ea5e9",
+              "#22d3ee",
+              "#fbbf24",
+              "#ef4444"
+            ]
+          },
+          "textStyle": {
+            "color": "#94a3b8"
+          },
+          "right": 8,
+          "top": "middle"
+        },
+        "xAxis3D": {
+          "type": "category",
+          "data": [
+            "X0",
+            "X1",
+            "X2",
+            "X3",
+            "X4",
+            "X5",
+            "X6",
+            "X7"
+          ]
+        },
+        "yAxis3D": {
+          "type": "category",
+          "data": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ]
+        },
+        "zAxis3D": {
+          "type": "value"
+        },
+        "grid3D": {
+          "boxWidth": 180,
+          "boxDepth": 140,
+          "viewControl": {
+            "projection": "perspective",
+            "autoRotate": true,
+            "autoRotateSpeed": 12,
+            "distance": 220
+          },
+          "light": {
+            "main": {
+              "intensity": 1.2
+            },
+            "ambient": {
+              "intensity": 0.4
+            }
+          }
+        },
+        "series": [
+          {
+            "type": "bar3D",
+            "data": [
+              [
+                0,
+                0,
+                37.3
+              ],
+              [
+                0,
+                1,
+                43.1
+              ],
+              [
+                0,
+                2,
+                35.8
+              ],
+              [
+                0,
+                3,
+                38.8
+              ],
+              [
+                0,
+                4,
+                38.0
+              ],
+              [
+                0,
+                5,
+                38.5
+              ],
+              [
+                0,
+                6,
+                41.3
+              ],
+              [
+                0,
+                7,
+                42.1
+              ],
+              [
+                1,
+                0,
+                59.4
+              ],
+              [
+                1,
+                1,
+                54.0
+              ],
+              [
+                1,
+                2,
+                53.3
+              ],
+              [
+                1,
+                3,
+                39.8
+              ],
+              [
+                1,
+                4,
+                34.5
+              ],
+              [
+                1,
+                5,
+                29.6
+              ],
+              [
+                1,
+                6,
+                23.7
+              ],
+              [
+                1,
+                7,
+                22.3
+              ],
+              [
+                2,
+                0,
+                73.0
+              ],
+              [
+                2,
+                1,
+                67.9
+              ],
+              [
+                2,
+                2,
+                61.3
+              ],
+              [
+                2,
+                3,
+                45.3
+              ],
+              [
+                2,
+                4,
+                29.8
+              ],
+              [
+                2,
+                5,
+                13.4
+              ],
+              [
+                2,
+                6,
+                5.3
+              ],
+              [
+                2,
+                7,
+                7.2
+              ],
+              [
+                3,
+                0,
+                81.7
+              ],
+              [
+                3,
+                1,
+                72.9
+              ],
+              [
+                3,
+                2,
+                60.7
+              ],
+              [
+                3,
+                3,
+                41.5
+              ],
+              [
+                3,
+                4,
+                23.1
+              ],
+              [
+                3,
+                5,
+                11.5
+              ],
+              [
+                3,
+                6,
+                0.1
+              ],
+              [
+                3,
+                7,
+                0.7
+              ],
+              [
+                4,
+                0,
+                79.2
+              ],
+              [
+                4,
+                1,
+                73.1
+              ],
+              [
+                4,
+                2,
+                57.6
+              ],
+              [
+                4,
+                3,
+                46.4
+              ],
+              [
+                4,
+                4,
+                22.0
+              ],
+              [
+                4,
+                5,
+                13.2
+              ],
+              [
+                4,
+                6,
+                5.9
+              ],
+              [
+                4,
+                7,
+                7.5
+              ],
+              [
+                5,
+                0,
+                61.2
+              ],
+              [
+                5,
+                1,
+                62.0
+              ],
+              [
+                5,
+                2,
+                54.4
+              ],
+              [
+                5,
+                3,
+                43.1
+              ],
+              [
+                5,
+                4,
+                31.3
+              ],
+              [
+                5,
+                5,
+                18.2
+              ],
+              [
+                5,
+                6,
+                14.9
+              ],
+              [
+                5,
+                7,
+                17.9
+              ],
+              [
+                6,
+                0,
+                50.6
+              ],
+              [
+                6,
+                1,
+                43.6
+              ],
+              [
+                6,
+                2,
+                44.7
+              ],
+              [
+                6,
+                3,
+                39.4
+              ],
+              [
+                6,
+                4,
+                37.8
+              ],
+              [
+                6,
+                5,
+                32.9
+              ],
+              [
+                6,
+                6,
+                33.3
+              ],
+              [
+                6,
+                7,
+                36.7
+              ],
+              [
+                7,
+                0,
+                24.0
+              ],
+              [
+                7,
+                1,
+                26.1
+              ],
+              [
+                7,
+                2,
+                28.3
+              ],
+              [
+                7,
+                3,
+                34.7
+              ],
+              [
+                7,
+                4,
+                43.6
+              ],
+              [
+                7,
+                5,
+                48.6
+              ],
+              [
+                7,
+                6,
+                49.7
+              ],
+              [
+                7,
+                7,
+                53.9
+              ]
+            ],
+            "shading": "lambert",
+            "label": {
+              "show": false
+            },
+            "itemStyle": {
+              "opacity": 0.9
+            },
+            "emphasis": {
+              "label": {
+                "show": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "today",
+      "title": "T_P4",
+      "option": {
+        "backgroundColor": "transparent",
+        "title": {
+          "text": "T_P4",
+          "left": "center",
+          "top": 8,
+          "textStyle": {
+            "color": "#e2e8f0",
+            "fontSize": 13
+          }
+        },
+        "tooltip": {
+          "trigger": "axis"
+        },
+        "grid": {
+          "top": 56,
+          "left": "10%",
+          "right": "8%",
+          "bottom": "12%",
+          "containLabel": true
+        },
+        "xAxis": {
+          "type": "category",
+          "data": [
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6"
+          ],
+          "axisLabel": {
+            "color": "#94a3b8"
+          }
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "T_P4_Y",
+          "axisLabel": {
+            "color": "#94a3b8"
+          },
+          "splitLine": {
+            "lineStyle": {
+              "color": "rgba(148,163,184,0.12)"
+            }
+          }
+        },
+        "series": [
+          {
+            "name": "T_P4_Y",
+            "type": "bar",
+            "data": [
+              71,
+              58,
+              78,
+              61,
+              67,
+              60
+            ],
+            "smooth": false,
+            "itemStyle": {
+              "color": "#22d3ee"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "insights": [
+    "AMR-04 处于故障态，建议优先调度附近空闲车接替任务。",
+    "库区 C 负载峰值超过 95%，出入库口存在排队风险。",
+    "近 6 小时自动化率维持在 78%~86%，稼动率仍有提升空间。"
+  ],
+  "_meta": {
+    "demo": true,
+    "seed": 42,
+    "data_source": "simulated",
+    "tier": "template"
+  }
+}
