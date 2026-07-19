@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ChatPanel from './components/ChatPanel';
 import TracePanel from './components/TracePanel';
-import { Activity, Sun, Moon, Cpu, Database, Languages, Settings, BookOpen } from 'lucide-react';
+import { Activity, Sun, Moon, Cpu, Database, Languages, Settings, BookOpen, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from './store';
+import { useAppStore, toI18nLng } from './store';
+import type { AppLanguage } from './store';
 import { ConfigProvider, theme as antdTheme, Select, Tooltip } from 'antd';
 import AdminLayout from './pages/admin/AdminLayout';
 import KnowledgePanel from './components/KnowledgePanel';
@@ -20,6 +21,7 @@ function App() {
   const { t, i18n } = useTranslation();
   const { theme, language, toggleTheme, setLanguage } = useAppStore();
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
   
   // Resizable panels state
   const [leftWidth, setLeftWidth] = useState(70); // percentage
@@ -29,7 +31,8 @@ function App() {
   // Skill & Model state
   const [skills, setSkills] = useState<{skill_id: string, skill_name: string}[]>([]);
   const [currentSkill, setCurrentSkill] = useState('plc_diagnostics');
-  const [currentModel, setCurrentModel] = useState('gemma4:e2b-it-qat');
+  const [llmProfiles, setLlmProfiles] = useState<{profile_id: string; name: string; model_name: string; provider: string; is_active?: boolean}[]>([]);
+  const [currentProfileId, setCurrentProfileId] = useState<string>('');
   const [permissionMode, setPermissionMode] = useState('ask_always');
   const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
     return localStorage.getItem('sidea_session_id') || uuidv4();
@@ -37,13 +40,31 @@ function App() {
   const [sessionRefreshTrigger, setSessionRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    i18n.changeLanguage(language);
+    i18n.changeLanguage(toI18nLng(language));
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
   }, [theme, language, i18n]);
+
+  useEffect(() => {
+    if (!langMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('[data-app-lang-menu]')) return;
+      setLangMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [langMenuOpen]);
+
+  const APP_LANG_OPTIONS: { value: AppLanguage; label: string }[] = [
+    { value: 'zh', label: '简中' },
+    { value: 'zh-TW', label: '繁中' },
+    { value: 'en', label: 'EN' },
+    { value: 'ja', label: '日文' },
+  ];
 
   useEffect(() => {
     localStorage.setItem('sidea_session_id', currentSessionId);
@@ -65,25 +86,32 @@ function App() {
         }
       })
       .catch(console.error);
-      
-    // Fetch config to get current model
-    fetch(`${getApiUrl()}/config`)
+
+    // Fetch enabled LLM profiles for top selector
+    fetch(`${getApiUrl()}/admin/llm/profiles?enabled=1`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.LLM_MODEL_NAME) {
-          setCurrentModel(data.LLM_MODEL_NAME.config_value);
-        }
+        if (!Array.isArray(data)) return;
+        setLlmProfiles(data);
+        const active = data.find((p: any) => p.is_active) || data[0];
+        if (active) setCurrentProfileId(active.profile_id);
       })
       .catch(console.error);
   }, []);
 
-  const handleModelChange = (val: string) => {
-    setCurrentModel(val);
-    fetch(`${getApiUrl()}/config/LLM_MODEL_NAME`, {
+  const handleModelChange = (profileId: string) => {
+    setCurrentProfileId(profileId);
+    fetch(`${getApiUrl()}/admin/llm/profiles/${profileId}/activate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config_value: val, category: 'llm' })
-    }).catch(console.error);
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        // refresh list so is_active flags stay consistent
+        const listRes = await fetch(`${getApiUrl()}/admin/llm/profiles?enabled=1`);
+        const list = await listRes.json();
+        if (Array.isArray(list)) setLlmProfiles(list);
+      })
+      .catch(console.error);
   };
 
   const handleNewEvent = (event: TraceEvent) => {
@@ -152,20 +180,50 @@ function App() {
           </div>
           
           <div className="flex items-center gap-6">
-            {/* Model Selector */}
+            {/* Model Selector — from enabled LLM Provider Profiles，按提供商分组 */}
             <div className="flex items-center gap-2">
               <Cpu size={16} className="text-[var(--accent-blue)]" />
               <span className="text-sm text-[var(--text-secondary)]">{t('label_model')}</span>
               <Select 
-                value={currentModel} 
+                value={currentProfileId || undefined} 
                 onChange={handleModelChange}
-                style={{ width: 160 }}
-                options={[
-                  { value: 'gemma4:e2b-it-qat', label: 'Gemma-4 QAT' },
-                  { value: 'llama3:8b-instruct', label: 'Llama3 8B' },
-                  { value: 'qwen2:7b', label: 'Qwen2 7B' },
-                  { value: 'mistral', label: 'Mistral 7B' }
-                ]}
+                style={{ width: 260 }}
+                placeholder="选择模型"
+                options={(() => {
+                  const labelMap: Record<string, string> = {
+                    gemini_native: 'Google Gemini',
+                    openai: 'OpenAI',
+                    openai_compatible: 'OpenAI Compatible',
+                    ollama: 'Ollama',
+                  };
+                  const order = ['gemini_native', 'openai', 'openai_compatible', 'ollama'];
+                  const buckets: Record<string, typeof llmProfiles> = {};
+                  for (const p of llmProfiles) {
+                    (buckets[p.provider] ||= []).push(p);
+                  }
+                  const groups: { label: string; options: { value: string; label: string }[] }[] = [];
+                  for (const key of order) {
+                    if (!buckets[key]?.length) continue;
+                    groups.push({
+                      label: labelMap[key] || key,
+                      options: buckets[key].map((p) => ({
+                        value: p.profile_id,
+                        label: `${p.name} · ${p.model_name}`,
+                      })),
+                    });
+                    delete buckets[key];
+                  }
+                  for (const [key, list] of Object.entries(buckets)) {
+                    groups.push({
+                      label: labelMap[key] || key,
+                      options: list.map((p) => ({
+                        value: p.profile_id,
+                        label: `${p.name} · ${p.model_name}`,
+                      })),
+                    });
+                  }
+                  return groups;
+                })()}
               />
             </div>
             
@@ -183,11 +241,43 @@ function App() {
 
             <div className="h-6 w-px bg-[var(--border-color)] mx-2"></div>
 
-            <Tooltip title="Switch Language" placement="bottom">
-              <button onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors">
-                <Languages size={18} className="text-[var(--accent-cyan)]" />
-              </button>
-            </Tooltip>
+            <div className="relative" data-app-lang-menu>
+              <Tooltip title="Switch Language" placement="bottom">
+                <button
+                  onClick={() => setLangMenuOpen((v) => !v)}
+                  className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors"
+                >
+                  <Languages size={18} className="text-[var(--accent-cyan)]" />
+                </button>
+              </Tooltip>
+              {langMenuOpen && (
+                <div className="absolute top-full right-0 mt-2 z-[100] min-w-[96px] rounded-lg border border-white/10 bg-[#1a1b26]/95 backdrop-blur-md shadow-xl py-1 overflow-hidden">
+                  {APP_LANG_OPTIONS.map((opt) => {
+                    const selected = language === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setLanguage(opt.value);
+                          setLangMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selected
+                            ? 'bg-[var(--accent-cyan)]/25 text-white'
+                            : 'text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="w-3.5 inline-flex justify-center">
+                          {selected ? <Check size={12} className="text-[var(--accent-cyan)]" /> : null}
+                        </span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <Tooltip title="Toggle Theme" placement="bottom">
               <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors">
                 <AnimatePresence mode="wait">

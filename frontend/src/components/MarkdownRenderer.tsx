@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,13 +6,21 @@ import rehypeRaw from 'rehype-raw';
 import mermaid from 'mermaid';
 import { v4 as uuidv4 } from 'uuid';
 import ReactECharts from 'echarts-for-react';
+import 'echarts-gl';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { Maximize2, X, ZoomIn, ZoomOut, Maximize, Download, FileImage, FileText } from 'lucide-react';
+import { Maximize2, X, ZoomIn, ZoomOut, Maximize, Download, FileImage, FileText, Copy, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { message, Image } from 'antd';
 import { getBaseUrl } from '../config';
+import { useTranslation } from 'react-i18next';
+import { useAppStore } from '../store';
+import {
+  applyThemeToOption,
+  DashboardGrid,
+  normalizeChartPayload,
+} from './DashboardPanel';
 
 mermaid.initialize({
   startOnLoad: false,
@@ -23,6 +31,9 @@ mermaid.initialize({
 interface MarkdownRendererProps {
   content: string;
   isTyping?: boolean;
+  onAutoFixRequest?: (errorMsg: string) => void;
+  /** 覆盖全局语言，用于消息级翻译结果中的图表 i18n */
+  displayLang?: string;
 }
 
 const ExportableTable = ({ children, ...props }: any) => {
@@ -58,26 +69,249 @@ const ExportableTable = ({ children, ...props }: any) => {
   );
 };
 
-const MarkdownRenderer = React.memo(({ content, isTyping }: MarkdownRendererProps) => {
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+/** 模型常把提示词里的占位符原样抄出，这类 URL 绝不是真实产物 */
+function isPlaceholderChartUrl(url: string): boolean {
+  const u = (url || '').trim();
+  if (!u) return true;
+  if (/chart_x+|chart_X+|chart_placeholder|chart_example|chart_demo/i.test(u)) return true;
+  // 真实产物必须是 chart_<纯数字毫秒>.json
+  if (/\/sandbox_workspace\/chart_/i.test(u) && !/\/sandbox_workspace\/chart_\d+\.json/i.test(u)) return true;
+  return false;
+}
 
-  const components = React.useMemo(() => ({
+const AsyncEChartsWrapper = ({
+  url,
+  theme,
+  onAutoFixRequest,
+  displayLang,
+}: {
+  url: string;
+  theme: string;
+  onAutoFixRequest?: (errorMsg: string) => void;
+  displayLang?: string;
+}) => {
+  const [raw, setRaw] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { i18n } = useTranslation();
+  const { language } = useAppStore();
+  const activeLang = displayLang || language || i18n.language;
+  const isFakeUrl = isPlaceholderChartUrl(url);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRaw(null);
+    setError(null);
+    if (isFakeUrl) {
+      setError('PLACEHOLDER_URL');
+      return;
+    }
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((parsed) => {
+        if (!cancelled) setRaw(parsed);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url, isFakeUrl]);
+
+  const payload = useMemo(() => (raw ? normalizeChartPayload(raw, activeLang) : null), [raw, activeLang]);
+
+  if (error === 'PLACEHOLDER_URL') {
+    return (
+      <div className="w-full my-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 text-sm leading-relaxed">
+        <div className="font-semibold mb-1">检测到假图表链接（占位符）</div>
+        <div className="opacity-90">
+          助手抄写了示例 URL（如 <code className="px-1">chart_xxxx.json</code>），并未真正调用沙箱。请<strong>新开对话</strong>重试，或换更大的模型；不要继续点自动修复。
+        </div>
+        <div className="mt-2 text-xs opacity-70 font-mono break-all">{url}</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    // 占位符 / 明显假 URL 的 404 不再触发 autofix，避免死循环
+    const allowAutofix = !isFakeUrl && !/HTTP 404/i.test(error);
+    return (
+      <EChartsParseError
+        codeString={url}
+        errorMsg={`Failed to load chart JSON: ${error}`}
+        onAutoFixRequest={allowAutofix ? onAutoFixRequest : undefined}
+      />
+    );
+  }
+
+  if (!raw || !payload) {
+    return (
+      <div className="w-full h-[300px] flex flex-col items-center justify-center border border-[var(--accent-cyan)]/30 rounded-xl bg-[var(--accent-cyan)]/5 my-4 text-[var(--accent-cyan)]">
+        <Loader className="animate-spin mb-3" size={28} />
+        <span className="text-sm font-bold tracking-widest animate-pulse">正在下载并渲染图表大屏...</span>
+      </div>
+    );
+  }
+
+  if (payload.kind === 'dashboard') {
+    return (
+      <DashboardGrid
+        title={payload.title}
+        panels={payload.panels}
+        theme={theme}
+        onAutoFixRequest={onAutoFixRequest}
+        sourceCode={JSON.stringify(raw, null, 2)}
+        raw={raw}
+        language={activeLang}
+      />
+    );
+  }
+
+  return (
+    <EChartsWrapper
+      option={applyThemeToOption(payload.option, theme, activeLang)}
+      codeString={JSON.stringify(raw, null, 2)}
+      theme={theme}
+      onAutoFixRequest={onAutoFixRequest}
+    />
+  );
+};
+
+const MarkdownRenderer = React.memo(({ content, isTyping, onAutoFixRequest, displayLang }: MarkdownRendererProps) => {
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const { i18n } = useTranslation();
+  const { theme, language } = useAppStore();
+  const activeLang = displayLang || language || i18n.language;
+
+  const components = React.useMemo(() => {
+    // 同一条回复里若已有可渲染的图表 URL，就把 Python 示例当普通代码，绝不触发 autofix 死循环
+    // 只有真实毫秒时间戳 chart_数字.json 才算产物；chart_xxxx 等占位符不算
+    const hasChartArtifact =
+      /https?:\/\/[^\s`'"]+\/sandbox_workspace\/chart_\d+\.json/i.test(content || '');
+
+    return {
     code({ node, inline, className, children, ...props }: any) {
-      const match = /language-(\w+)/.exec(className || '');
+      const match = /language-([\w-]+)/.exec(className || '');
       const lang = match ? match[1] : '';
       const codeString = String(children).replace(/\n$/, '');
 
       if (!inline && lang === 'mermaid') {
         return <MermaidChart chart={codeString} isTyping={isTyping} />;
       }
-
-      if (!inline && (lang === 'echarts' || lang === 'json')) {
-        try {
-          const option = JSON.parse(codeString);
-          if (option.series || option.xAxis) {
-            return <ReactECharts option={option} style={{ height: '350px', width: '100%' }} theme="dark" />;
+      
+      // Python + SDK：有图表产物时正常展示代码；无产物时只提示，不自动发起 autofix（避免死循环）
+      if (!inline && (lang === 'python' || lang === 'py')) {
+        if (
+          !hasChartArtifact &&
+          (codeString.includes('export_dashboard') || codeString.includes('sidea_sdk') || codeString.includes('export_echarts'))
+        ) {
+          if (isTyping) {
+            return (
+              <div className="w-full h-[120px] flex flex-col items-center justify-center border border-[var(--accent-cyan)]/30 rounded-xl bg-[var(--accent-cyan)]/5 my-4 text-[var(--accent-cyan)]">
+                <Loader className="animate-spin mb-3" size={24} />
+                <span className="text-sm font-bold tracking-widest animate-pulse">等待沙箱导出图表…</span>
+              </div>
+            );
           }
-        } catch (e) {}
+          return (
+            <div className="my-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+              这段是 Python 源码，前端不会直接渲染。正确交付应包含
+              <code className="mx-1">```echarts-i18n</code>
+              的图表 URL。请让助手调用 <code className="mx-1">run_python_in_sandbox</code> 后重试。
+              <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-black/30 p-2 text-[11px] text-slate-300 whitespace-pre-wrap">{codeString}</pre>
+            </div>
+          );
+        }
+      }
+
+      if (!inline && (lang === 'echarts' || lang === 'json' || lang === 'echarts-i18n' || lang === 'javascript' || lang === 'js' || !lang)) {
+        const urlMatch = codeString.match(/https?:\/\/[^\s"'`]+?\.json/i);
+        if (urlMatch && !codeString.includes('series') && !codeString.includes('xAxis') && !codeString.trim().startsWith('{')) {
+          return <AsyncEChartsWrapper url={urlMatch[0]} theme={theme} onAutoFixRequest={onAutoFixRequest} displayLang={activeLang} />;
+        }
+        
+        try {
+          const cleanCodeString = codeString
+            // 匹配字符串并保留，匹配单行/多行注释并删除
+            .replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\/\/.*$|\/\*[\s\S]*?\*\//gm, (match, grp) => grp ? grp : '')
+            // 剔除尾部逗号 (Trailing commas) 确保 JSON.parse 兼容
+            .replace(/,\s*([\]}])/g, '$1');
+            
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(cleanCodeString);
+          } catch (jsonError) {
+            // Fallback: Try to evaluate it as Javascript if JSON.parse fails (e.g. unquoted keys, full JS script)
+            try {
+              // Try evaluating just as an object literal first
+              if (cleanCodeString.trim().startsWith('{') && cleanCodeString.trim().endsWith('}')) {
+                 parsed = new Function(`return ${cleanCodeString}`)();
+              } else {
+                 // Try evaluating as a full script and extract option
+                 parsed = new Function(`
+                   let _detectedOption = null;
+                   try {
+                     ${cleanCodeString}
+                     if (typeof option !== 'undefined') _detectedOption = option;
+                     else if (typeof chartOption !== 'undefined') _detectedOption = chartOption;
+                     else if (typeof echartOption !== 'undefined') _detectedOption = echartOption;
+                   } catch(e) {}
+                   return _detectedOption;
+                 `)();
+              }
+            } catch (jsError) {
+               if (cleanCodeString.includes('True') || cleanCodeString.includes('False') || cleanCodeString.includes('None')) {
+                 throw new Error('解析失败：检测到你输出了 Python 字典格式！前端无法直接渲染 Python 代码，请务必使用 run_python_in_sandbox 工具执行，并在沙箱中使用 json.dump 保存为 chart_option.json！');
+               }
+               throw new Error('解析失败：既不是标准 JSON，也不是可执行的配置脚本。请勿在对话中手写图表配置，必须调用沙箱工具并生成 chart_option.json！');
+            }
+          }
+          
+          if (!parsed) {
+             throw new Error('解析失败：未能从代码中提取到 option 对象。');
+          }
+
+          const normalized = normalizeChartPayload(parsed, activeLang);
+          if (!normalized) {
+            throw new Error('解析失败：JSON 不是可识别的 ECharts option / dashboard 结构。');
+          }
+          if (normalized.kind === 'dashboard') {
+            return (
+              <DashboardGrid
+                title={normalized.title}
+                panels={normalized.panels}
+                theme={theme}
+                onAutoFixRequest={onAutoFixRequest}
+                sourceCode={codeString}
+                raw={parsed}
+                language={activeLang}
+              />
+            );
+          }
+          return (
+            <EChartsWrapper
+              option={applyThemeToOption(normalized.option, theme, activeLang)}
+              codeString={codeString}
+              theme={theme}
+              onAutoFixRequest={onAutoFixRequest}
+            />
+          );
+        } catch (e: any) {
+          if (lang === 'echarts' || lang === 'echarts-i18n' || codeString.includes('series') || codeString.includes('xAxis') || codeString.includes('option =')) {
+            if (isTyping) {
+              return (
+                <div className="w-full h-[200px] flex flex-col items-center justify-center border border-[var(--accent-cyan)]/30 rounded-xl bg-[var(--accent-cyan)]/5 my-4 text-[var(--accent-cyan)]">
+                  <Loader className="animate-spin mb-3" size={28} />
+                  <span className="text-sm font-bold tracking-widest animate-pulse">大屏图表生成中...</span>
+                </div>
+              );
+            }
+            return <EChartsParseError codeString={codeString} errorMsg={e.message || 'JSON 语法错误'} onAutoFixRequest={onAutoFixRequest} />;
+          }
+        }
       }
 
       const isFileName = /\.(png|jpg|jpeg|gif|csv|xlsx|txt)$/i.test(codeString.trim()) && !codeString.includes('\n');
@@ -85,7 +319,7 @@ const MarkdownRenderer = React.memo(({ content, isTyping }: MarkdownRendererProp
       if (isFileName) {
         return (
           <code 
-            className={`inline-block bg-[#1a1b26] px-1.5 py-0.5 rounded text-[0.9em] font-mono border border-white/5 text-[var(--accent-purple)] cursor-pointer hover:bg-white/10 hover:shadow-[0_0_10px_var(--accent-purple)] transition-all underline decoration-dashed underline-offset-4`}
+            className={`inline-block bg-[var(--bg-dark)] px-1.5 py-0.5 rounded text-[0.9em] font-mono border border-[var(--border-color)] text-[var(--accent-purple)] cursor-pointer hover:shadow-[0_0_10px_var(--accent-purple)] transition-all underline decoration-dashed underline-offset-4`}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
                  e.preventDefault();
@@ -104,13 +338,25 @@ const MarkdownRenderer = React.memo(({ content, isTyping }: MarkdownRendererProp
       }
 
       return !inline ? (
-        <div className="bg-[#1a1b26] p-4 rounded-xl overflow-x-auto my-3 border border-white/10 shadow-inner text-[0.9em]">
+        <div className="bg-[var(--bg-dark)] p-4 rounded-xl overflow-x-auto my-3 border border-[var(--border-color)] shadow-inner text-[0.9em] relative group/code">
+          <div className="absolute top-2 right-2 opacity-0 group-hover/code:opacity-100 transition-opacity z-10">
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(codeString);
+                message.success('已复制代码');
+              }}
+              className="p-1.5 bg-[#1a1b26]/80 backdrop-blur border border-white/10 hover:bg-white/10 hover:border-white/20 rounded-md text-gray-300 hover:text-white transition-all shadow-sm"
+              title="复制代码"
+            >
+              <Copy size={14} />
+            </button>
+          </div>
           <code className={className} {...props}>
             {children}
           </code>
         </div>
       ) : (
-        <code className="bg-[#1a1b26] px-1.5 py-0.5 rounded text-[0.9em] text-[var(--accent-cyan)] font-mono border border-white/5" {...props}>
+        <code className="bg-[var(--bg-dark)] px-1.5 py-0.5 rounded text-[0.9em] text-[var(--accent-cyan)] font-mono border border-[var(--border-color)]" {...props}>
           {children}
         </code>
       );
@@ -122,17 +368,38 @@ const MarkdownRenderer = React.memo(({ content, isTyping }: MarkdownRendererProp
     tr: ({ node, ...props }: any) => <tr className="hover:bg-white/5 transition-colors m-0" {...props} />,
     img: ({ node, ...props }: any) => <img className="rounded-xl shadow-lg border border-white/10" {...props} />,
     p: ({ node, ...props }: any) => <div className="mb-4 last:mb-0" {...props} />,
-  }), [isTyping]);
+  };
+  }, [isTyping, activeLang, theme, onAutoFixRequest, content]);
+
+  let processedContent = content;
+  if (
+    !isTyping &&
+    ((processedContent.includes('"i18n"') && processedContent.includes('"option"')) ||
+      processedContent.includes('"type": "dashboard"') ||
+      processedContent.includes('"type":"dashboard"'))
+  ) {
+    if (!processedContent.includes('```echarts') && !processedContent.includes('```json')) {
+      const jsonStart = processedContent.indexOf('{');
+      const jsonEnd = processedContent.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const possibleJson = processedContent.substring(jsonStart, jsonEnd + 1);
+        try {
+          JSON.parse(possibleJson);
+          processedContent = processedContent.replace(possibleJson, '\n```echarts-i18n\n' + possibleJson + '\n```\n');
+        } catch (e) {}
+      }
+    }
+  }
 
   return (
     <>
-      <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:p-0 prose-pre:bg-transparent">
+      <div className={`prose ${theme === 'dark' ? 'prose-invert' : ''} max-w-none prose-p:leading-relaxed prose-pre:p-0 prose-pre:bg-transparent`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}
           components={components}
         >
-          {content}
+          {processedContent}
         </ReactMarkdown>
       </div>
       {previewImage && (
@@ -152,6 +419,191 @@ const MarkdownRenderer = React.memo(({ content, isTyping }: MarkdownRendererProp
     </>
   );
 });
+
+function EChartsParseError({ codeString, errorMsg, onAutoFixRequest }: { codeString: string, errorMsg: string, onAutoFixRequest?: (msg: string) => void }) {
+  const [showSource, setShowSource] = useState(false);
+  const hasRequestedFix = useRef(false);
+
+  useEffect(() => {
+    if (onAutoFixRequest && !hasRequestedFix.current) {
+      hasRequestedFix.current = true;
+      onAutoFixRequest(`[JSON Parse Error] ${errorMsg}`);
+    }
+  }, [errorMsg, onAutoFixRequest]);
+
+  return (
+    <div className="w-full block overflow-x-auto relative group/echarts my-4 border border-[var(--border-color)] rounded-xl bg-[var(--bg-panel)] p-2 min-h-[100px]">
+      <div className="absolute top-2 right-2 opacity-0 group-hover/echarts:opacity-100 transition-opacity z-10 flex gap-2">
+        <button 
+          onClick={() => setShowSource(!showSource)}
+          className="flex items-center gap-1.5 px-2 py-1.5 bg-[#1a1b26]/80 backdrop-blur border border-[var(--accent-cyan)]/30 hover:bg-[var(--accent-cyan)]/20 hover:border-[var(--accent-cyan)] rounded-md text-[var(--accent-cyan)] transition-all shadow-lg text-xs"
+        >
+          <FileText size={14} /> {showSource ? '查看错误' : '查看源码'}
+        </button>
+      </div>
+      {showSource ? (
+        <div className="p-4 bg-[var(--bg-dark)] rounded text-[0.9em] overflow-x-auto text-gray-300 font-mono mt-8 border border-white/5">
+          <pre><code>{codeString}</code></pre>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center p-8 text-red-400 gap-4 bg-red-500/10 rounded-lg border border-red-500/30 w-full min-h-[200px] mt-8">
+          <div className="font-bold flex items-center gap-2"><X size={18} /> 图表配置解析失败</div>
+          <div className="text-sm opacity-80 font-mono text-center px-4">{errorMsg}</div>
+          <div className="text-xs mt-2 text-white/50">大模型生成的 JSON 语法有误（如缺少引号、括号不匹配）。请点击右上角「查看源码」检查</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+class EChartsErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, errorMsg: string}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMsg: error.message };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ECharts Render Error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 text-red-400 gap-4 bg-red-500/10 rounded-lg border border-red-500/30 w-full h-[200px]">
+          <div className="font-bold flex items-center gap-2"><X size={18} /> 图表渲染崩溃</div>
+          <div className="text-sm opacity-80 font-mono text-center px-4">{this.state.errorMsg || '底层渲染引擎异常'}</div>
+          <div className="text-xs mt-2 text-white/50">请点击右上角「查看源码」检查大模型生成的 JSON 是否合法</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function EChartsWrapper({
+  option,
+  codeString,
+  theme,
+  onAutoFixRequest,
+  height,
+  compact,
+}: {
+  option: any;
+  codeString: string;
+  theme: string;
+  onAutoFixRequest?: (msg: string) => void;
+  height?: string;
+  compact?: boolean;
+}) {
+  const [showSource, setShowSource] = useState(false);
+  const chartHeight =
+    height ||
+    (Array.isArray(option.grid) && option.grid.length > 1
+      ? '550px'
+      : Array.isArray(option.series) && option.series.length > 2
+        ? '450px'
+        : '350px');
+  const hasRequestedFix = useRef(false);
+
+  // 启发式校验：双 Y 轴共享同一 grid 是合法的；按 xAxisIndex 统计笛卡尔网格数
+  let layoutError = '';
+  try {
+    const grids = Array.isArray(option.grid) ? option.grid : option.grid ? [option.grid] : [];
+    const series = Array.isArray(option.series) ? option.series : option.series ? [option.series] : [];
+
+    const validTypes = [
+      'line', 'bar', 'pie', 'scatter', 'effectScatter', 'radar', 'tree', 'treemap', 'sunburst',
+      'boxplot', 'candlestick', 'heatmap', 'map', 'parallel', 'lines', 'graph', 'sankey',
+      'funnel', 'gauge', 'pictorialBar', 'themeRiver', 'custom',
+    ];
+    const invalidTypes = series
+      .map((s: any) => s.type)
+      .filter((t: any) => t && !validTypes.includes(t) && !String(t).toLowerCase().endsWith('3d'));
+
+    if (invalidTypes.length > 0) {
+      layoutError = `不受支持的图表类型: ${invalidTypes.join(', ')}。ECharts 不支持此类型，请改用有效的标准图表类型(如 line, bar 等)。`;
+    }
+
+    const nonPie = series.filter((s: any) => ['line', 'bar', 'scatter', 'heatmap'].includes(s.type));
+    // 双 Y（同一 xAxisIndex、不同 yAxisIndex）算同一网格，不视为越界
+    const gridIndices = new Set(nonPie.map((s: any) => s.xAxisIndex || 0));
+
+    if (!layoutError && gridIndices.size > Math.max(grids.length, 1)) {
+      layoutError = `坐标系越界: 图表引用了 ${gridIndices.size} 个网格，但配置中只定义了 ${grids.length} 个网格。请使用 export_dashboard 按独立面板导出。`;
+    }
+
+    // 仅当 ≥4 个非饼系列挤在同一 x 轴且只有 1 个 grid 时告警（双 Y combo 通常 2 个 series）
+    if (!layoutError && nonPie.length >= 4 && gridIndices.size === 1 && grids.length <= 1) {
+      layoutError = `严重布局重叠: 检测到 ${nonPie.length} 个非饼图系列拥挤在同一个坐标系中。请使用 export_dashboard 拆成独立面板！`;
+    }
+
+    const has3D = series.some((s: any) => s.type && String(s.type).toLowerCase().endsWith('3d'));
+    if (!layoutError && has3D && !option.grid3D) {
+      layoutError = `缺少 3D 坐标系: 包含了 3D 图表系列，但未定义 grid3D、xAxis3D、yAxis3D 等组件。请使用 export_dashboard(type='bar3d')。`;
+    }
+  } catch (e) {
+    layoutError = 'JSON 结构分析异常';
+  }
+
+  useEffect(() => {
+    if (layoutError && onAutoFixRequest && !hasRequestedFix.current) {
+      hasRequestedFix.current = true;
+      onAutoFixRequest(`[Layout Collision Error] ${layoutError}`);
+    }
+  }, [layoutError, onAutoFixRequest]);
+
+  const wrapperClass = compact
+    ? 'w-full block relative group/echarts p-1 min-h-[80px]'
+    : 'w-full block overflow-x-auto relative group/echarts my-4 border border-[var(--border-color)] rounded-xl bg-[var(--bg-panel)] p-2 min-h-[100px]';
+
+  return (
+    <div className={wrapperClass}>
+      <div className="absolute top-2 right-2 opacity-0 group-hover/echarts:opacity-100 transition-opacity z-10 flex gap-2">
+        <button
+          onClick={() => setShowSource(!showSource)}
+          className="flex items-center gap-1.5 px-2 py-1.5 bg-[#1a1b26]/80 backdrop-blur border border-[var(--accent-cyan)]/30 hover:bg-[var(--accent-cyan)]/20 hover:border-[var(--accent-cyan)] rounded-md text-[var(--accent-cyan)] transition-all shadow-lg text-xs"
+          title="切换视图"
+        >
+          <FileText size={14} /> {showSource ? '查看图表' : '查看源码'}
+        </button>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(codeString);
+            message.success('已复制 ECharts 完整配置 JSON');
+          }}
+          className="flex items-center gap-1.5 px-2 py-1.5 bg-[#1a1b26]/80 backdrop-blur border border-[var(--accent-cyan)]/30 hover:bg-[var(--accent-cyan)]/20 hover:border-[var(--accent-cyan)] rounded-md text-[var(--accent-cyan)] transition-all shadow-lg text-xs"
+          title="复制图表配置 JSON"
+        >
+          <Copy size={14} /> 复制配置
+        </button>
+      </div>
+      {showSource ? (
+        <div className="p-4 bg-[var(--bg-dark)] rounded text-[0.9em] overflow-x-auto text-gray-300 font-mono mt-8 border border-white/5">
+          <pre><code>{codeString}</code></pre>
+        </div>
+      ) : layoutError ? (
+        <div className="flex flex-col items-center justify-center p-8 text-red-400 gap-4 bg-red-500/10 rounded-lg border border-red-500/30 w-full h-[250px] mt-8">
+          <div className="font-bold flex items-center gap-2"><X size={18} /> 大模型排版错误拦截</div>
+          <div className="text-sm opacity-80 font-mono text-center px-4">{layoutError}</div>
+          <div className="text-xs mt-2 text-white/50">请点击右上角「查看源码」，或提示模型使用 `export_dashboard` 自动排版引擎</div>
+        </div>
+      ) : (
+        <div style={{ minWidth: compact ? undefined : '500px', width: '100%' }}>
+          <EChartsErrorBoundary>
+            <ReactECharts
+              option={option}
+              style={{ height: chartHeight, width: '100%' }}
+              theme={theme}
+              notMerge={true}
+              lazyUpdate={true}
+            />
+          </EChartsErrorBoundary>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default MarkdownRenderer;
 

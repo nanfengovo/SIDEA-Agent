@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, message, Spin } from 'antd';
 import { Save, FileCode } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { getApiUrl } from '../../config';
 
 interface PromptEditorProps {
   templatePath: string;
 }
 
 export default function PromptEditor({ templatePath }: PromptEditorProps) {
+  const { t } = useTranslation();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -16,16 +19,19 @@ export default function PromptEditor({ templatePath }: PromptEditorProps) {
     const fetchPrompt = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/admin/prompts?path=${encodeURIComponent(templatePath)}`);
+        const res = await fetch(
+          `${getApiUrl()}/admin/prompts?path=${encodeURIComponent(templatePath)}`,
+        );
         if (res.ok) {
           const data = await res.json();
           setContent(data.content || '');
         } else {
           setContent('');
+          message.error(t('prompt_load_failed'));
         }
       } catch (e) {
         console.error(e);
-        message.error("Failed to load prompt");
+        message.error(t('prompt_load_failed'));
       } finally {
         setLoading(false);
       }
@@ -36,25 +42,26 @@ export default function PromptEditor({ templatePath }: PromptEditorProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/prompts', {
+      const res = await fetch(`${getApiUrl()}/admin/prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: templatePath, content })
+        body: JSON.stringify({ path: templatePath, content }),
       });
       if (res.ok) {
-        message.success('Prompt saved successfully!');
+        message.success(t('prompt_saved'));
       } else {
-        message.error('Failed to save prompt');
+        message.error(t('prompt_save_failed'));
       }
     } catch (e) {
       console.error(e);
-      message.error('Save failed');
+      message.error(t('prompt_save_failed'));
     } finally {
       setSaving(false);
     }
   };
 
-  if (!templatePath) return <div className="p-4 text-[var(--text-secondary)]">No template path provided.</div>;
+  if (!templatePath)
+    return <div className="p-4 text-[var(--text-secondary)]">No template path provided.</div>;
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-dark)] border border-[var(--border-color)] rounded-lg overflow-hidden">
@@ -64,10 +71,10 @@ export default function PromptEditor({ templatePath }: PromptEditorProps) {
           {templatePath}
         </div>
         <Button type="primary" size="small" icon={<Save size={14} />} onClick={handleSave} loading={saving}>
-          Save
+          {t('prompt_save')}
         </Button>
       </div>
-      
+
       {loading ? (
         <div className="flex-1 flex justify-center items-center">
           <Spin />
@@ -75,7 +82,7 @@ export default function PromptEditor({ templatePath }: PromptEditorProps) {
       ) : (
         <Input.TextArea
           value={content}
-          onChange={e => setContent(e.target.value)}
+          onChange={(e) => setContent(e.target.value)}
           className="flex-1 w-full bg-transparent border-none text-[var(--text-primary)] font-mono p-4 focus:ring-0 resize-none rounded-none"
           style={{ minHeight: '400px' }}
         />

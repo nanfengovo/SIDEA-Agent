@@ -118,6 +118,64 @@ def init_db(db_path: str = "config.db"):
         );
         """)
 
+        # RCS 可配置连接器（Profile + Binding）
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rcs_connector_profile (
+            profile_id     TEXT PRIMARY KEY,
+            name           TEXT NOT NULL,
+            base_url       TEXT NOT NULL,
+            auth_type      TEXT NOT NULL DEFAULT 'bearer',
+            auth_config    TEXT NOT NULL DEFAULT '{}',
+            timeout_ms     INTEGER NOT NULL DEFAULT 15000,
+            is_simulation  INTEGER NOT NULL DEFAULT 1,
+            is_active      INTEGER NOT NULL DEFAULT 0,
+            extra_headers  TEXT NOT NULL DEFAULT '{}',
+            notes          TEXT DEFAULT '',
+            created_at     TEXT DEFAULT (datetime('now','localtime')),
+            updated_at     TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rcs_operation_binding (
+            id              TEXT PRIMARY KEY,
+            profile_id      TEXT NOT NULL,
+            capability_id   TEXT NOT NULL,
+            method          TEXT NOT NULL DEFAULT 'GET',
+            path            TEXT NOT NULL,
+            query_json      TEXT NOT NULL DEFAULT '{}',
+            body_json       TEXT,
+            headers_json    TEXT NOT NULL DEFAULT '{}',
+            input_map_json  TEXT NOT NULL DEFAULT '{}',
+            response_map_json TEXT NOT NULL DEFAULT '{}',
+            success_when_json TEXT NOT NULL DEFAULT '{"http_status":[200]}',
+            enabled         INTEGER NOT NULL DEFAULT 1,
+            confirm_required INTEGER NOT NULL DEFAULT 0,
+            risk_level_override TEXT,
+            updated_at      TEXT DEFAULT (datetime('now','localtime')),
+            UNIQUE(profile_id, capability_id)
+        );
+        """)
+
+        # LLM Provider Profiles（多 Profile + 单 Active）
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS llm_provider_profile (
+            profile_id     TEXT PRIMARY KEY,
+            name           TEXT NOT NULL,
+            provider       TEXT NOT NULL,
+            base_url       TEXT NOT NULL DEFAULT '',
+            api_key        TEXT NOT NULL DEFAULT '',
+            model_name     TEXT NOT NULL,
+            temperature    REAL NOT NULL DEFAULT 0.1,
+            max_tokens     INTEGER,
+            extra_config   TEXT NOT NULL DEFAULT '{}',
+            is_enabled     INTEGER NOT NULL DEFAULT 1,
+            is_active      INTEGER NOT NULL DEFAULT 0,
+            notes          TEXT DEFAULT '',
+            created_at     TEXT DEFAULT (datetime('now','localtime')),
+            updated_at     TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
         conn.commit()
     print("SQLite database initialized successfully (v3.0)")
 
@@ -136,7 +194,7 @@ def seed_default_config(db_path: str = "config.db"):
         ("OLLAMA_BASE_URL", "http://localhost:11434", "model", "Ollama 服务地址"),
         ("OLLAMA_KEEP_ALIVE", "30s", "model", "模型空闲卸载时间"),
         
-        ("API_ABP_BASE_URL", "http://localhost:5000", "api", "C# ABP 系统基础地址"),
+        ("API_ABP_BASE_URL", "http://localhost:9000", "api", "C# ABP/RCS 系统基础地址（兼容旧配置；优先用 RCS 连接器 Profile）"),
         ("API_AUTH_TYPE", "bearer", "api", "认证方式"),
         ("API_ABP_TOKEN", "", "api", "ABP 接口访问 Token"),
         
@@ -146,6 +204,13 @@ def seed_default_config(db_path: str = "config.db"):
         ("AUTH_JWT_SECRET", "sidea-change-this-in-production", "system", "JWT 签名密钥"),
         ("LOG_PARSE_MODE", "passive", "system", "日志解析模式: passive/active/both"),
         ("CACHE_EXPIRE_HOURS", "24", "system", "分析缓存过期小时数"),
+
+        # 文生图：默认关闭云端，无网工厂走离线矢量；可在管理后台开关
+        ("IMAGE_CLOUD_ENABLED", "false", "image", "是否启用云端写实生图（AICodeWith/OpenAI Images 兼容）"),
+        ("IMAGE_BACKUP_ENABLED", "false", "image", "是否启用 Pollinations 外网备用生图"),
+        ("IMAGE_API_BASE_URL", "https://api.aicodewith.com", "image", "云端生图服务地址"),
+        ("IMAGE_API_KEY", "", "image", "云端生图 API Key"),
+        ("IMAGE_MODEL_NAME", "gpt-image-2", "image", "云端生图模型名"),
     ]
     with get_connection(db_path) as conn:
         cursor = conn.cursor()

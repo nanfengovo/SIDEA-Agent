@@ -1,8 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader, User, Cpu, Paperclip, Copy, MessageSquareReply, X, FileText, Image as ImageIcon, Check, Languages, Brain, Database, Download, FileDown, ImageDown, BookOpen } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Loader, User, Cpu, Paperclip, Copy, MessageSquareReply, X, FileText, Image as ImageIcon, Check, Languages, Brain, Database, Download, FileDown, ImageDown, BookOpen, Layers } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
+import RunSummaryFooter, { EtaBanner, type RunSummary } from './RunSummaryFooter';
+import ActivityTimeline, { type Activity } from './ActivityTimeline';
 import { getApiUrl, getBaseUrl } from '../config';
 import { toPng } from 'html-to-image';
+import {
+  TARGET_LANG_OPTIONS,
+  protectFencedBlocks,
+  convertMarkdownToTraditional,
+  needsLlmTranslate,
+} from './langUtils';
+import type { TargetLang } from './langUtils';
 import { jsPDF } from 'jspdf';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +36,44 @@ interface Attachment {
   type: string;
 }
 
+const ToolTimer = ({ startTime }: { startTime: number }) => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [startTime]);
+  return <div className="text-xs font-mono text-[var(--accent-cyan)]/80 bg-[var(--accent-cyan)]/10 px-2 py-1 rounded-md">耗时: {elapsed}s</div>;
+};
+
+function deriveSummaryFromTrace(events?: TraceEvent[]): RunSummary | undefined {
+  if (!Array.isArray(events) || !events.length) return undefined;
+  const rs = [...events].reverse().find((e) => e?.type === 'run_summary');
+  if (rs?.data) return rs.data as RunSummary;
+
+  const tools: string[] = [];
+  let start: number | undefined;
+  let end: number | undefined;
+  for (const e of events) {
+    if (e.timestamp) {
+      if (start == null || e.timestamp < start) start = e.timestamp;
+      if (end == null || e.timestamp > end) end = e.timestamp;
+    }
+    if (e.type === 'tool_start' && e.data?.name && !tools.includes(e.data.name)) {
+      tools.push(e.data.name);
+    }
+  }
+  if (!tools.length && start == null) return undefined;
+  const duration_ms = start != null && end != null ? Math.max(0, end - start) : undefined;
+  return {
+    tools,
+    tool_count: tools.length,
+    duration_ms,
+    duration_sec: duration_ms != null ? Math.round(duration_ms / 10) / 100 : undefined,
+  };
+}
+
 interface Message {
   id: string;
   role: 'user' | 'agent';
@@ -34,8 +81,70 @@ interface Message {
   attachments?: Attachment[];
   translation?: string;
   isTranslating?: boolean;
-  targetLang?: string;
+  targetLang?: TargetLang;
+  /** 消息级显示语言：立刻驱动图表/正文 i18n，不等 LLM */
+  viewLang?: TargetLang;
+  runSummary?: RunSummary;
   trace_events?: TraceEvent[];
+  runningToolName?: string;
+  toolStartTime?: number;
+  /** Cursor 风执行活动时间线（思考/工具/输出） */
+  activities?: Activity[];
+}
+
+let _actSeq = 0;
+function newActivity(kind: Activity['kind'], name?: string): Activity {
+  return {
+    id: `act-${Date.now()}-${_actSeq++}`,
+    kind,
+    name,
+    startTs: Date.now(),
+    status: 'running',
+  };
+}
+
+function closeRunningActs(
+  acts: Activity[],
+  status: 'done' | 'error' = 'done',
+  detail?: string,
+): Activity[] {
+  return acts.map((a) =>
+    a.status === 'running' ? { ...a, status, endTs: Date.now(), detail: detail ?? a.detail } : a,
+  );
+}
+
+/** 历史消息：从落库的 trace_events 还原活动时间线（折叠态回看用） */
+function deriveActivitiesFromTrace(events?: TraceEvent[]): Activity[] {
+  if (!Array.isArray(events) || !events.length) return [];
+  const acts: Activity[] = [];
+  let current: Activity | null = null;
+  const close = (ts: number, status: 'done' | 'error' = 'done', detail?: string) => {
+    if (current) {
+      current.endTs = ts;
+      current.status = status;
+      if (detail) current.detail = detail;
+      current = null;
+    }
+  };
+  for (const e of events) {
+    const ts = e.timestamp || 0;
+    if (e.type === 'llm_start') {
+      close(ts);
+      current = { id: `h-${acts.length}`, kind: 'thinking', startTs: ts, status: 'done' };
+      acts.push(current);
+    } else if (e.type === 'tool_start') {
+      close(ts);
+      current = { id: `h-${acts.length}`, kind: 'tool', name: e.data?.name, startTs: ts, status: 'done' };
+      acts.push(current);
+    } else if (e.type === 'tool_end') {
+      close(ts);
+    } else if (e.type === 'tool_error') {
+      close(ts, 'error', e.data?.error || e.data?.message);
+    } else if (e.type === 'llm_end' || e.type === 'stream_end') {
+      close(ts);
+    }
+  }
+  return acts.map((a) => ({ ...a, endTs: a.endTs ?? a.startTs }));
 }
 
 export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sessionId, permissionMode = 'ask_always', onPermissionModeChange, onMessageSent }: ChatPanelProps) {
@@ -49,14 +158,19 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [targetLang, setTargetLang] = useState('简体中文');
+  const [targetLang, setTargetLang] = useState<TargetLang>('简体中文');
+  const [langMenuFor, setLangMenuFor] = useState<string | null>(null);
   const [approvalData, setApprovalData] = useState<{ id: string, toolName: string, toolInput: any, reason: string } | null>(null);
   const [thinkingDepth, setThinkingDepth] = useState('auto');
+  const [executionMode, setExecutionMode] = useState('auto'); // auto | goal | react
   const [contextLength, setContextLength] = useState('8k');
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(false);
   
   const [messageQueue, setMessageQueue] = useState<{text: string, attachments: Attachment[]}[]>([]);
   const [interruptPrompt, setInterruptPrompt] = useState<{text: string, attachments: Attachment[]} | null>(null);
+  const [etaInfo, setEtaInfo] = useState<{ eta_sec: number; confidence?: string; sample_size?: number } | null>(null);
+  const [taskStartedAt, setTaskStartedAt] = useState<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,12 +209,48 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
         if (res.ok) {
           const historyMsgs = await res.json();
           if (historyMsgs.length > 0) {
-            setMessages(historyMsgs.map((m: any) => ({
-              id: m.message_id,
-              role: m.role,
-              content: m.content,
-              trace_events: m.trace_events ? JSON.parse(m.trace_events) : undefined
-            })));
+            setMessages(historyMsgs.map((m: any) => {
+              let runSummary: RunSummary | undefined;
+              try {
+                if (m.run_meta) runSummary = typeof m.run_meta === 'string' ? JSON.parse(m.run_meta) : m.run_meta;
+              } catch { /* ignore */ }
+              let trace_events: TraceEvent[] | undefined;
+              try {
+                trace_events = m.trace_events
+                  ? (typeof m.trace_events === 'string' ? JSON.parse(m.trace_events) : m.trace_events)
+                  : undefined;
+              } catch { /* ignore */ }
+              if (!runSummary && Array.isArray(trace_events)) {
+                const rs = [...trace_events].reverse().find((e: any) => e?.type === 'run_summary');
+                if (rs?.data) runSummary = rs.data;
+              }
+              let attachments: Attachment[] | undefined;
+              try {
+                const rawAtts = m.attachments
+                  ? (typeof m.attachments === 'string' ? JSON.parse(m.attachments) : m.attachments)
+                  : undefined;
+                if (Array.isArray(rawAtts) && rawAtts.length > 0) {
+                  attachments = rawAtts.map((url: string, idx: number) => {
+                    const name = decodeURIComponent((url.split('/').pop() || '附件').split('?')[0]);
+                    const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+                    return {
+                      id: `${m.message_id}-att-${idx}`,
+                      name,
+                      url,
+                      type: isImage ? 'image/*' : 'application/octet-stream',
+                    };
+                  });
+                }
+              } catch { /* ignore */ }
+              return {
+                id: m.message_id,
+                role: m.role,
+                content: m.content,
+                attachments,
+                trace_events,
+                runSummary,
+              };
+            }));
           } else {
             setMessages([{ id: 'welcome', role: 'agent', content: t('welcome_msg') || '您好！欢迎使用 SIDEA 智能体。' }]);
           }
@@ -112,60 +262,240 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
     fetchHistory();
   }, [sessionId, t]);
 
+  useEffect(() => {
+    if (!langMenuFor) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('[data-lang-menu]')) return;
+      setLangMenuFor(null);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [langMenuFor]);
+
+  useEffect(() => {
+    if (!isTyping || !taskStartedAt) {
+      setElapsedSec(0);
+      return;
+    }
+    const tick = () => setElapsedSec((Date.now() - taskStartedAt) / 1000);
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [isTyping, taskStartedAt]);
+
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleTranslate = async (id: string, text: string) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, isTranslating: true, translation: '', targetLang } : m));
-    
+  const emitTrace = useCallback((partial: Partial<TraceEvent> & { type: string; data?: any }) => {
+    onEvent({
+      id: `translate-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      data: {},
+      ...partial,
+    });
+  }, [onEvent]);
+
+  const handleTranslate = async (id: string, text: string, lang: TargetLang = targetLang) => {
+    setTargetLang(lang);
+    setLangMenuFor(null);
+
+    // 1) 立刻切换消息显示语言 → 图表/i18n 马上生效（不等模型）
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              targetLang: lang,
+              viewLang: lang,
+              isTranslating: needsLlmTranslate(lang),
+              translation: lang === '简体中文' ? undefined : m.translation,
+            }
+          : m
+      )
+    );
+
+    // 不清理历史链路：在既有思维链后续追加「翻译」节点，便于对照
+    emitTrace({ type: 'llm_start', data: { mode: 'translate', target_lang: lang } });
+    emitTrace({
+      type: 'tool_start',
+      data: {
+        name: 'translate_message',
+        target_lang: lang,
+        chars: text.length,
+        strategy: needsLlmTranslate(lang) ? 'llm' : 'local',
+      },
+    });
+
     try {
-      const res = await fetch(`${getApiUrl()}/chat/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, target_lang: targetLang })
+      // 2) 简中：恢复原文
+      if (lang === '简体中文') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id ? { ...m, translation: undefined, isTranslating: false, viewLang: lang } : m
+          )
+        );
+        emitTrace({
+          type: 'tool_end',
+          data: { name: 'translate_message', target_lang: lang, mode: 'restore_original' },
+        });
+        emitTrace({ type: 'llm_end', data: { target_lang: lang } });
+        emitTrace({ type: 'stream_end', data: {} });
+        message.success('已切换为简体中文（图表同步）');
+        return;
+      }
+
+      // 3) 繁中：本地简→繁，保护 echarts 代码块；图表走 viewLang
+      if (lang === '繁體中文') {
+        const converted = convertMarkdownToTraditional(text);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, translation: converted, isTranslating: false, viewLang: lang }
+              : m
+          )
+        );
+        emitTrace({
+          type: 'tool_end',
+          data: {
+            name: 'translate_message',
+            target_lang: lang,
+            mode: 'local_s2t',
+            chars_out: converted.length,
+          },
+        });
+        emitTrace({ type: 'llm_end', data: { target_lang: lang } });
+        emitTrace({ type: 'stream_end', data: {} });
+        message.success('已本地转换为繁體中文（图表同步）');
+        return;
+      }
+
+      // 4) EN / 日文：调用模型翻译（思维链可见）
+      const { masked, restore, blockCount } = protectFencedBlocks(text);
+      emitTrace({
+        type: 'tool_start',
+        data: {
+          name: 'protect_fenced_blocks',
+          blocks: blockCount,
+          note: '已保护 echarts/代码围栏，避免模型改坏 URL',
+        },
       });
-      
-      if (!res.ok) throw new Error('Translation failed');
-      const reader = res.body?.getReader();
-      if (!reader) return;
-      
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+      emitTrace({
+        type: 'tool_end',
+        data: { name: 'protect_fenced_blocks', blocks: blockCount },
+      });
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 90000);
+
+      let assembled = '';
+      try {
+        const res = await fetch(`${getApiUrl()}/chat/translate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: masked, target_lang: lang }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error('无流式响应');
+
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let startedStream = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
             const dataStr = line.substring(6).trim();
-            if (dataStr === '[DONE]') continue;
+            if (!dataStr || dataStr === '[DONE]') continue;
+            let data: any;
             try {
-              const data = JSON.parse(dataStr);
-              if (data.token) {
-                setMessages(prev => prev.map(m => 
-                  m.id === id ? { ...m, translation: (m.translation || '') + data.token } : m
-                ));
-              } else if (data.error) {
-                setMessages(prev => prev.map(m => 
-                  m.id === id ? { ...m, translation: (m.translation || '') + '\n[翻译失败: ' + data.error + ']' } : m
-                ));
+              data = JSON.parse(dataStr);
+            } catch {
+              continue;
+            }
+
+            // 后端结构化事件 → 思维链（跳过已由前端发出的起点事件，避免重复节点）
+            if (data.type && data.type !== 'llm_token') {
+              if (data.type === 'llm_start') continue;
+              if (data.type === 'tool_start' && data.data?.name === 'translate_message') continue;
+              emitTrace({
+                type: data.type,
+                data: data.data || { name: data.name, message: data.error || data.message },
+              });
+            }
+
+            const token = data.token || data.data?.token;
+            if (token) {
+              if (!startedStream) {
+                emitTrace({ type: 'stream_start', data: { target_lang: lang } });
+                startedStream = true;
               }
-            } catch(e) {}
+              assembled += typeof token === 'string' ? token : String(token);
+              const preview = restore(assembled);
+              setMessages((prev) =>
+                prev.map((m) => (m.id === id ? { ...m, translation: preview } : m))
+              );
+            }
+
+            if (data.type === 'tool_error' || data.error) {
+              throw new Error(data.error || data.data?.message || '翻译失败');
+            }
           }
         }
+
+        const finalText = restore(assembled).trim();
+        if (!finalText) {
+          throw new Error('模型未返回译文');
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, translation: finalText, isTranslating: false, viewLang: lang }
+              : m
+          )
+        );
+        message.success(`已翻译为 ${lang}（图表同步）`);
+      } finally {
+        clearTimeout(timer);
       }
-    } catch(err) {
+    } catch (err: any) {
       console.error(err);
+      const errMsg = err?.name === 'AbortError' ? '翻译超时，请重试' : err?.message || '翻译失败';
+      emitTrace({
+        type: 'tool_error',
+        data: { name: 'translate_message', message: errMsg, error: errMsg },
+      });
+      // 即便 LLM 失败，viewLang 已切换，图表仍有效；正文提示错误
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                isTranslating: false,
+                translation:
+                  m.translation ||
+                  `> ⚠️ ${errMsg}\n>\n> 图表语言已切换为 **${lang}**；正文翻译失败时可重试。`,
+              }
+            : m
+        )
+      );
+      message.error(errMsg);
     } finally {
-      setMessages(prev => prev.map(m => m.id === id ? { ...m, isTranslating: false } : m));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, isTranslating: false } : m))
+      );
+      emitTrace({ type: 'stream_end', data: {} });
     }
   };
 
@@ -336,7 +666,12 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
     if (isInjection) {
       const lastUserMsg = messages.slice().reverse().find(m => m.role === 'user');
       if (lastUserMsg) {
-         finalPayloadMsg = lastUserMsg.content + `\n\n**[补充提示]**: ${textToSubmit}`;
+         let baseContent = lastUserMsg.content;
+         const splitIndex = baseContent.indexOf('\\n\\n**[补充提示]**:');
+         if (splitIndex !== -1) {
+             baseContent = baseContent.substring(0, splitIndex);
+         }
+         finalPayloadMsg = baseContent + `\\n\\n**[补充提示]**: ${textToSubmit}`;
          finalPayloadAttachments = [...(lastUserMsg.attachments || []), ...currentAttachments];
       }
       setMessages(prev => {
@@ -363,7 +698,31 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
     }
 
     setIsTyping(true);
+    setTaskStartedAt(Date.now());
+    setEtaInfo(null);
     onClear();
+
+    // 基于历史交互估算本次任务耗时
+    fetch(`${getApiUrl()}/history/eta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        skill_id: skillId,
+        message: finalPayloadMsg,
+        has_attachment: finalPayloadAttachments.length > 0,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.eta_sec != null) {
+          setEtaInfo({
+            eta_sec: data.eta_sec,
+            confidence: data.confidence,
+            sample_size: data.sample_size,
+          });
+        }
+      })
+      .catch(() => {});
     
     // Force immediate scroll to bottom when sending a new message ONLY if the user hasn't explicitly scrolled up
     setTimeout(() => {
@@ -386,8 +745,9 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
           thinking_depth: thinkingDepth,
           context_length: contextLength,
           use_knowledge_base: useKnowledgeBase,
-          permission_mode: permissionMode
-        })
+          permission_mode: permissionMode,
+          execution_mode: executionMode,
+        }),
       });
 
       if (!res.ok) {
@@ -400,6 +760,16 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
       
       let agentMsgId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: agentMsgId, role: 'agent', content: '' }]);
+
+      // 活动时间线：思考/工具/输出 步骤维护
+      const updateActs = (fn: (acts: Activity[]) => Activity[]) => {
+        setMessages(prev => prev.map(m =>
+          m.id === agentMsgId ? { ...m, activities: fn(m.activities || []) } : m
+        ));
+      };
+      const startActivity = (kind: Activity['kind'], name?: string) => {
+        updateActs(acts => [...closeRunningActs(acts), newActivity(kind, name)]);
+      };
 
       let hasStartedStreaming = false;
       let buffer = '';
@@ -444,14 +814,68 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                 }
               }
               
+              if (event.type === 'llm_start') {
+                startActivity('thinking');
+              } else if (event.type === 'tool_start') {
+                startActivity('tool', event.data?.name);
+                setMessages(prev => prev.map(m => 
+                  m.id === agentMsgId ? { ...m, runningToolName: event.data?.name || '未知工具', toolStartTime: Date.now() } : m
+                ));
+              } else if (event.type === 'tool_end') {
+                updateActs(acts => closeRunningActs(acts, 'done'));
+                setMessages(prev => prev.map(m => 
+                  m.id === agentMsgId ? { ...m, runningToolName: undefined } : m
+                ));
+                if (event.data?.name) {
+                  notification.success({
+                    message: `✅ 工具执行完成`,
+                    description: `工具 [${event.data.name}] 已成功执行。`,
+                    duration: 3,
+                    className: 'custom-dark-notification'
+                  });
+                }
+              } else if (event.type === 'tool_error') {
+                updateActs(acts => closeRunningActs(acts, 'error', event.data?.error || event.data?.message));
+                setMessages(prev => prev.map(m => 
+                  m.id === agentMsgId ? { ...m, runningToolName: undefined } : m
+                ));
+              } else if (event.type === 'llm_end') {
+                updateActs(acts => closeRunningActs(acts, 'done'));
+              } else if (event.type === 'run_summary') {
+                // run_summary = 本轮结束的权威信号；立刻收口，避免"已完成"和"转圈"同时出现
+                updateActs(acts => closeRunningActs(acts, 'done'));
+                setMessages(prev => prev.map(m =>
+                  m.id === agentMsgId
+                    ? {
+                        ...m,
+                        runSummary: event.data as RunSummary,
+                        runningToolName: undefined,
+                        toolStartTime: undefined,
+                        activities: closeRunningActs(m.activities || [], 'done'),
+                      }
+                    : m
+                ));
+                setIsTyping(false);
+                setEtaInfo(null);
+                setTaskStartedAt(null);
+                onEvent({ id: 'stream_end', type: 'stream_end', timestamp: Date.now(), data: {} });
+              }
+
               if (event.type === 'llm_token' && event.data.token) {
                 if (!hasStartedStreaming) {
                   onEvent({ id: 'stream_start', type: 'stream_start', timestamp: Date.now(), data: {} });
                   hasStartedStreaming = true;
                 }
-                setMessages(prev => prev.map(m => 
-                  m.id === agentMsgId ? { ...m, content: m.content + event.data.token } : m
-                ));
+                setMessages(prev => prev.map(m => {
+                  if (m.id !== agentMsgId) return m;
+                  // 首个 token：把"思考中"收口，切到"撰写回复"
+                  let acts = m.activities || [];
+                  const last = acts[acts.length - 1];
+                  if (!(last && last.status === 'running' && last.kind === 'responding')) {
+                    acts = [...closeRunningActs(acts), newActivity('responding')];
+                  }
+                  return { ...m, content: m.content + event.data.token, activities: acts };
+                }));
               } else if (event.type === 'llm_final' && event.data.content) {
                 setMessages(prev => prev.map(m => 
                   m.id === agentMsgId && !m.content ? { ...m, content: event.data.content } : m
@@ -467,11 +891,20 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
           }
         }
       }
+      updateActs(acts => closeRunningActs(acts, 'done'));
       onEvent({ id: 'stream_end', type: 'stream_end', timestamp: Date.now(), data: {} });
+      setEtaInfo(null);
+      setTaskStartedAt(null);
       if (onMessageSent) {
         onMessageSent();
       }
     } catch (err: any) {
+      // 收口所有未完成的活动，避免时间线卡在"运行中"
+      setMessages(prev => prev.map(m =>
+        m.activities?.some(a => a.status === 'running')
+          ? { ...m, activities: closeRunningActs(m.activities, 'error', err?.message) }
+          : m
+      ));
       if (err.name === 'AbortError') {
          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'agent', content: `\n\n*[用户已手动终止执行]*` }]);
       } else {
@@ -480,6 +913,8 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
       }
     } finally {
       setIsTyping(false);
+      setEtaInfo(null);
+      setTaskStartedAt(null);
       abortControllerRef.current = null;
     }
   };
@@ -515,6 +950,17 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
       message.error("审批提交失败！");
     }
   };
+
+  const handleAutoFix = useCallback((errorMsg: string) => {
+    // 假执行 / 占位符 URL / 404：不要自动连打，小模型只会反复抄 chart_xxxx
+    if (/假执行|沙箱工具没执行|只生成了代码|chart_x+|PLACEHOLDER|HTTP 404/i.test(errorMsg)) {
+      message.warning('图表链接无效（多为模型抄写了占位符）。请新开对话重试，并确认当前模型能可靠调用工具。', 6);
+      return;
+    }
+    const fixMessage = `[系统异常拦截]: 前端图表渲染完全崩溃！\n错误信息: ${errorMsg}\n\n**严重警告**：为了打破死循环，**禁止任何道歉、解释或“我正在执行”等废话！**\n你的回复必须【第一行就立刻发起工具调用】，调用 \`run_python_in_sandbox\`！严禁在对话中手写 JSON 或 Python 字典！对于复杂图表，请在沙箱中写 Python 代码构建 option，并用 \`from sidea_sdk import export_dashboard\` 导出，保存后原样输出沙箱返回的 URL 代码块！严禁编造或抄写 chart_xxxx 这类占位符！`;
+    handleSubmit(undefined, { text: fixMessage, attachments: [] }, true);
+    message.warning('图表渲染失败，正在要求助手重新调用沙箱…', 4);
+  }, [handleSubmit]);
 
   return (
     <div 
@@ -586,25 +1032,98 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                       )}
                     </div>
                   ) : (
-                    <div className="text-[var(--text-primary)]/90 leading-relaxed tracking-wide w-full overflow-hidden">
-                      {m.content ? <MarkdownRenderer content={m.content} isTyping={isTyping && m.id === messages[messages.length - 1].id} /> : <span className="animate-pulse opacity-50">▌</span>}
+                    <div className="text-[var(--text-primary)]/90 leading-relaxed tracking-wide w-full overflow-hidden flex flex-col gap-2">
+                      {(() => {
+                        const isLast = m.id === messages[messages.length - 1].id;
+                        const isLive = isTyping && isLast && !m.runSummary;
+                        const acts = m.activities?.length ? m.activities : deriveActivitiesFromTrace(m.trace_events);
+                        // 即便没有逐步活动，只要有 runSummary 或正在跑，也显示状态条
+                        if (!acts.length && !m.runSummary && !isLive) return null;
+                        const fallbackActs: Activity[] = acts.length
+                          ? acts
+                          : m.runSummary
+                            ? [{
+                                id: 'done',
+                                kind: 'responding',
+                                startTs: (m.runSummary.finished_at || Date.now()) - (m.runSummary.duration_ms || 0),
+                                endTs: m.runSummary.finished_at || Date.now(),
+                                status: 'done',
+                              }]
+                            : [newActivity('thinking')];
+                        return (
+                          <ActivityTimeline
+                            activities={fallbackActs}
+                            running={isLive}
+                            forcedDone={!!m.runSummary || !isLive}
+                          />
+                        );
+                      })()}
+                      {m.content ? (
+                        <div className="relative">
+                          <MarkdownRenderer
+                            content={m.content}
+                            isTyping={isTyping && m.id === messages[messages.length - 1].id && !m.runningToolName && !m.runSummary}
+                            onAutoFixRequest={(!isTyping && m.id === messages[messages.length - 1].id) ? handleAutoFix : undefined}
+                            displayLang={m.viewLang}
+                          />
+                          {/* 模型常留下「正在执行…」占位文案：任务已结束后给出明确提示，避免误以为还在跑 */}
+                          {!!m.runSummary && /正在执行|请稍候|稍等|executing|please wait/i.test(m.content) && (
+                            <div className="mt-2 text-[11px] text-emerald-400/90 border border-emerald-500/20 bg-emerald-500/5 rounded-md px-2.5 py-1.5">
+                              ✓ 本轮任务已结束。上方若仍出现「正在执行」字样，是模型中途留下的占位文案，可忽略。
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        !m.runningToolName && isTyping && !m.runSummary && (
+                          <span className="animate-pulse opacity-50">▌</span>
+                        )
+                      )}
+                      {m.runningToolName && !m.runSummary && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-3 p-3 rounded-lg bg-[#0a0a0f]/50 border border-[var(--accent-cyan)]/20 shadow-inner flex items-center justify-between overflow-hidden relative"
+                        >
+                          <div className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--accent-cyan)] to-transparent w-full animate-[shimmer_2s_infinite]"></div>
+                          <div className="flex items-center gap-3 text-[var(--accent-cyan)] text-sm">
+                            <div className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-cyan)] opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--accent-cyan)]"></span>
+                            </div>
+                            <span className="font-mono tracking-wide font-medium">正在执行工具: {m.runningToolName}...</span>
+                          </div>
+                          <ToolTimer startTime={m.toolStartTime || Date.now()} />
+                        </motion.div>
+                      )}
+                      {m.role === 'agent' && m.runSummary && (
+                        <RunSummaryFooter summary={m.runSummary} />
+                      )}
+                      {m.role === 'agent' && !m.runSummary && !isTyping && deriveSummaryFromTrace(m.trace_events) && (
+                        <RunSummaryFooter summary={deriveSummaryFromTrace(m.trace_events)} />
+                      )}
                     </div>
                   )}
-                  {m.translation !== undefined && (
+                  {m.translation !== undefined && m.translation !== '' && (
                     <div className="mt-3 pt-3 border-t border-white/10 relative">
                       <div className="text-xs text-[var(--accent-purple)] mb-2 flex items-center gap-1">
                         <Languages size={12} /> 翻译结果 ({m.targetLang || '中文'})
+                        {m.isTranslating && <span className="ml-1 opacity-70 animate-pulse">模型翻译中…</span>}
                       </div>
                       <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#1a1b26] prose-pre:border prose-pre:border-white/10 max-w-none text-[0.95rem]">
-                        <MarkdownRenderer content={m.translation} />
+                        <MarkdownRenderer content={m.translation} displayLang={m.viewLang || m.targetLang} />
                       </div>
-                      {m.isTranslating && <span className="inline-block w-1.5 h-4 ml-1 bg-current animate-pulse align-middle" />}
+                    </div>
+                  )}
+                  {m.isTranslating && !m.translation && (
+                    <div className="mt-3 pt-3 border-t border-white/10 text-xs text-[var(--accent-purple)] flex items-center gap-2">
+                      <Loader size={12} className="animate-spin" />
+                      正在调用模型翻译为 {m.targetLang}…（图表语言已先切换，详见右侧思维链）
                     </div>
                   )}
                 </div>
                 
                 {/* Action Bar */}
-                <div className={`flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className={`flex gap-2 mt-1 transition-opacity ${langMenuFor === m.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                   {m.role === 'agent' && (
                     <div className="flex items-center bg-black/20 rounded-md border border-white/5 overflow-hidden mr-1">
                       <Tooltip title="导出为 PDF" placement="bottom"><button onClick={() => handleExportPDF(m)} className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-[var(--accent-cyan)] transition-colors"><Download size={14} /></button></Tooltip>
@@ -613,17 +1132,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                     </div>
                   )}
                   {m.role === 'agent' && (
-                    <div className="flex items-center bg-black/20 rounded-md border border-white/5 overflow-hidden">
-                      <select
-                        value={targetLang}
-                        onChange={(e) => setTargetLang(e.target.value)}
-                        className="bg-transparent text-gray-400 text-xs outline-none cursor-pointer hover:text-[var(--accent-cyan)] pl-2 pr-1 appearance-none"
-                      >
-                        <option value="简体中文" className="bg-[#1a1b26]">简中</option>
-                        <option value="繁體中文" className="bg-[#1a1b26]">繁中</option>
-                        <option value="English" className="bg-[#1a1b26]">EN</option>
-                        <option value="日本語" className="bg-[#1a1b26]">日文</option>
-                      </select>
+                    <div className="relative flex items-center bg-black/20 rounded-md border border-white/5 overflow-visible">
                       <button
                           onClick={() => {
                             if (m.role === 'agent') {
@@ -642,15 +1151,41 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                         >
                           <BookOpen size={14} />
                       </button>
-                      <Tooltip title={`翻译为 ${targetLang}`} placement="bottom">
-                        <button 
-                          onClick={() => handleTranslate(m.id, m.content)}
-                          className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-[var(--accent-cyan)] transition-colors"
-                          disabled={m.isTranslating}
-                        >
-                          <Languages size={14} className={m.isTranslating ? "animate-pulse" : ""} />
-                        </button>
-                      </Tooltip>
+                      <div className="relative" data-lang-menu>
+                        <Tooltip title={`翻译为 ${targetLang}（点击选择语言）`} placement="bottom">
+                          <button
+                            onClick={() => setLangMenuFor(langMenuFor === m.id ? null : m.id)}
+                            className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-[var(--accent-cyan)] transition-colors"
+                            disabled={m.isTranslating}
+                          >
+                            <Languages size={14} className={m.isTranslating ? "animate-pulse" : ""} />
+                          </button>
+                        </Tooltip>
+                        {langMenuFor === m.id && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 min-w-[96px] rounded-lg border border-white/10 bg-[#1a1b26]/95 backdrop-blur-md shadow-xl py-1 overflow-hidden">
+                            {TARGET_LANG_OPTIONS.map((opt) => {
+                              const selected = (m.targetLang || targetLang) === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => handleTranslate(m.id, m.content, opt.value)}
+                                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                                    selected
+                                      ? 'bg-[var(--accent-cyan)]/25 text-white'
+                                      : 'text-gray-300 hover:bg-white/10'
+                                  }`}
+                                >
+                                  <span className="w-3.5 inline-flex justify-center">
+                                    {selected ? <Check size={12} className="text-[var(--accent-cyan)]" /> : null}
+                                  </span>
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                   <Tooltip title="复制内容" placement="bottom">
@@ -661,9 +1196,17 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                       {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
                     </button>
                   </Tooltip>
-                  <Tooltip title="引用回复" placement="bottom">
+                  <Tooltip title="引用回复 (支持选中文本片段)" placement="bottom">
                     <button 
-                      onClick={() => setReplyTo(m)}
+                      onClick={() => {
+                        const selection = window.getSelection()?.toString().trim();
+                        if (selection) {
+                          setReplyTo({ ...m, content: selection });
+                          window.getSelection()?.removeAllRanges();
+                        } else {
+                          setReplyTo(m);
+                        }
+                      }}
                       className="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-[var(--accent-cyan)] transition-colors bg-black/20 border border-white/5"
                     >
                       <MessageSquareReply size={14} />
@@ -680,22 +1223,45 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
             </motion.div>
           ))}
           
-          {isTyping && (
+          {/* 底部临时气泡：仅在还没有 agent 消息占位时显示，避免与消息内时间线双重转圈 */}
+          {isTyping && messages[messages.length - 1]?.role !== 'agent' && (
              <motion.div 
                initial={{ opacity: 0, y: 10 }} 
                animate={{ opacity: 1, y: 0 }} 
                exit={{ opacity: 0, scale: 0.9 }}
-               className="flex gap-4 justify-start w-full"
+               className="flex flex-col gap-2 w-full"
              >
-               <div className="w-10 h-10 rounded-full bg-[var(--accent-cyan)]/10 flex items-center justify-center border border-[var(--accent-cyan)]/40 animate-border-glow shadow-[0_0_15px_rgba(0,242,254,0.2)]">
-                  <Loader size={20} className="text-[var(--accent-cyan)] animate-spin" />
+               <div className="flex gap-4 justify-start w-full">
+                 <div className="w-10 h-10 rounded-full bg-[var(--accent-cyan)]/10 flex items-center justify-center border border-[var(--accent-cyan)]/40 animate-border-glow shadow-[0_0_15px_rgba(0,242,254,0.2)]">
+                    <Loader size={20} className="text-[var(--accent-cyan)] animate-spin" />
+                 </div>
+                 <div className="message-bubble-agent rounded-2xl rounded-tl-none px-5 py-4 flex items-center gap-2 shadow-lg backdrop-blur-md h-[48px]">
+                   <span className="w-2 h-2 bg-[var(--accent-cyan)] rounded-full animate-ping"></span>
+                   <span className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-ping" style={{animationDelay: '0.2s'}}></span>
+                   <span className="w-2 h-2 bg-[var(--accent-purple)] rounded-full animate-ping" style={{animationDelay: '0.4s'}}></span>
+                 </div>
                </div>
-               <div className="message-bubble-agent rounded-2xl rounded-tl-none px-5 py-4 flex items-center gap-2 shadow-lg backdrop-blur-md h-[48px]">
-                 <span className="w-2 h-2 bg-[var(--accent-cyan)] rounded-full animate-ping"></span>
-                 <span className="w-2 h-2 bg-[var(--accent-blue)] rounded-full animate-ping" style={{animationDelay: '0.2s'}}></span>
-                 <span className="w-2 h-2 bg-[var(--accent-purple)] rounded-full animate-ping" style={{animationDelay: '0.4s'}}></span>
-               </div>
+               {etaInfo && (
+                 <div className="ml-14 mr-2">
+                   <EtaBanner
+                     etaSec={etaInfo.eta_sec}
+                     confidence={etaInfo.confidence}
+                     sampleSize={etaInfo.sample_size}
+                     elapsedSec={elapsedSec}
+                   />
+                 </div>
+               )}
              </motion.div>
+          )}
+          {isTyping && messages[messages.length - 1]?.role === 'agent' && etaInfo && (
+            <div className="ml-14 mr-2 mb-2">
+              <EtaBanner
+                etaSec={etaInfo.eta_sec}
+                confidence={etaInfo.confidence}
+                sampleSize={etaInfo.sample_size}
+                elapsedSec={elapsedSec}
+              />
+            </div>
           )}
         </AnimatePresence>
       </div>
@@ -731,7 +1297,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               className="flex items-center justify-between bg-black/20 border border-[var(--accent-cyan)]/30 rounded-lg px-4 py-2"
             >
               <div className="text-sm text-[var(--text-secondary)] truncate flex-1">
-                <span className="text-[var(--accent-cyan)] mr-2">回复 {replyTo.role === 'agent' ? '智能体' : '用户'}:</span>
+                <span className="text-[var(--accent-cyan)] mr-2">{replyTo.role === 'agent' ? t('reply_to_agent') : t('reply_to_user')}</span>
                 {replyTo.content}
               </div>
               <button type="button" onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-white ml-2">
@@ -775,7 +1341,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="h-[60px] w-[50px] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] transition-colors flex-shrink-0"
-            title="上传文件或图片 (支持拖拽和粘贴)"
+            title={t('upload_tip')}
           >
             <Paperclip size={24} />
           </button>
@@ -790,7 +1356,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                   onClick={handleStop}
                   className="flex items-center gap-2 bg-[#1a1b26] border border-red-500/50 text-red-500 hover:bg-red-500/20 px-4 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all text-xs font-bold"
                 >
-                  <div className="w-2.5 h-2.5 bg-red-500 rounded-sm"></div> 停止生成
+                  <div className="w-2.5 h-2.5 bg-red-500 rounded-sm"></div> {t('stop_generating')}
                 </button>
               </div>
             )}
@@ -806,7 +1372,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               }}
               onPaste={handlePaste}
               placeholder={t('chat_placeholder') || "输入指令或粘贴图片 (Ctrl+V)..."}
-              className="relative w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl pl-5 pr-5 pt-4 pb-12 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] transition-colors placeholder-[var(--text-secondary)] resize-none min-h-[60px] max-h-[150px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              className="relative w-full bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl pl-5 pr-5 pt-4 pb-14 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-cyan)] transition-colors placeholder-[var(--text-secondary)] resize-none min-h-[60px] max-h-[200px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
               style={{ WebkitAppearance: 'none' }}
               rows={1}
             />
@@ -819,9 +1385,21 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               }`} title="思考深度 / 策略">
                 <Brain size={12} className="mr-1" />
                 <select value={thinkingDepth} onChange={(e) => setThinkingDepth(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
-                  <option value="auto" className="bg-[#1a1b26] text-gray-300">深度: 自动</option>
-                  <option value="deep" className="bg-[#1a1b26] text-[var(--accent-purple)]">深度: 深度推理</option>
-                  <option value="fast" className="bg-[#1a1b26] text-green-400">深度: 快速响应</option>
+                  <option value="auto" className="bg-[#1a1b26] text-gray-300">{t('depth_auto')}</option>
+                  <option value="deep" className="bg-[#1a1b26] text-[var(--accent-purple)]">{t('depth_deep')}</option>
+                  <option value="fast" className="bg-[#1a1b26] text-green-400">{t('depth_fast')}</option>
+                </select>
+              </div>
+              <div className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
+                executionMode === 'goal' ? 'text-[var(--accent-cyan)] border-[var(--accent-cyan)]/50 bg-[var(--accent-cyan)]/10' :
+                executionMode === 'react' ? 'text-orange-400 border-orange-400/50 bg-orange-400/10' :
+                'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-black/40 hover:text-[var(--accent-cyan)] hover:border-[var(--accent-cyan)]/60'
+              }`} title={t('exec_hint') || '执行模式：自动识别大屏并拆分子任务'}>
+                <Layers size={12} className="mr-1" />
+                <select value={executionMode} onChange={(e) => setExecutionMode(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
+                  <option value="auto" className="bg-[#1a1b26] text-gray-300">{t('exec_auto') || '执行: 自动'}</option>
+                  <option value="goal" className="bg-[#1a1b26] text-[var(--accent-cyan)]">{t('exec_goal') || '执行: 目标拆分'}</option>
+                  <option value="react" className="bg-[#1a1b26] text-orange-400">{t('exec_react') || '执行: 自由 ReAct'}</option>
                 </select>
               </div>
               <div className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
@@ -831,9 +1409,9 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               }`} title="上下文长度">
                 <Database size={12} className="mr-1" />
                 <select value={contextLength} onChange={(e) => setContextLength(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
-                  <option value="8k" className="bg-[#1a1b26] text-gray-300">上下文: 8K</option>
-                  <option value="32k" className="bg-[#1a1b26] text-orange-400">上下文: 32K</option>
-                  <option value="128k" className="bg-[#1a1b26] text-red-400">上下文: 128K</option>
+                  <option value="8k" className="bg-[#1a1b26] text-gray-300">{t('ctx_8k')}</option>
+                  <option value="32k" className="bg-[#1a1b26] text-orange-400">{t('ctx_32k')}</option>
+                  <option value="128k" className="bg-[#1a1b26] text-red-400">{t('ctx_128k')}</option>
                 </select>
               </div>
               <div 
@@ -846,7 +1424,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               >
                 <BookOpen size={12} className="mr-1" />
                 <span className="font-medium bg-transparent outline-none cursor-pointer">
-                  知识库: {useKnowledgeBase ? '开启' : '关闭'}
+                  {useKnowledgeBase ? t('kb_on') : t('kb_off')}
                 </span>
               </div>
               {onPermissionModeChange && (
@@ -860,9 +1438,9 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                     onChange={(e) => onPermissionModeChange(e.target.value)} 
                     className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium"
                   >
-                    <option value="ask_always" className="bg-[#1a1b26] text-red-400">权限: 请求批准</option>
-                    <option value="ask_risky" className="bg-[#1a1b26] text-orange-400">权限: 替我审批</option>
-                    <option value="full_access" className="bg-[#1a1b26] text-green-400">权限: 完全访问</option>
+                    <option value="ask_always" className="bg-[#1a1b26] text-red-400">{t('perm_ask_always')}</option>
+                    <option value="ask_risky" className="bg-[#1a1b26] text-orange-400">{t('perm_ask_risky')}</option>
+                    <option value="full_access" className="bg-[#1a1b26] text-green-400">{t('perm_full')}</option>
                   </select>
                 </div>
               )}
@@ -874,7 +1452,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
             disabled={(!input.trim() && attachments.length === 0)}
             className="relative h-[60px] w-[60px] bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-blue)] text-white font-bold rounded-xl hover:shadow-[0_0_20px_rgba(0,242,254,0.6)] disabled:opacity-50 disabled:hover:shadow-none transition-all flex items-center justify-center flex-shrink-0 group overflow-hidden"
           >
-            <div className="absolute inset-0 w-full h-full bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+            <div className="pointer-events-none absolute inset-0 w-full h-full bg-white/20 opacity-0 -translate-x-full group-hover:opacity-100 group-hover:animate-[shimmer_1.5s_infinite]"></div>
             <Send className="text-white w-6 h-6 group-hover:translate-x-1 transition-transform" />
           </button>
         </form>
@@ -896,10 +1474,10 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               >
                 <div className="flex items-center gap-3 mb-4 text-[var(--accent-cyan)]">
                   <Brain size={24} />
-                  <h3 className="text-lg font-bold tracking-wider">AI 正在输出中</h3>
+                  <h3 className="text-lg font-bold tracking-wider">{t('ai_outputting')}</h3>
                 </div>
                 <p className="text-[var(--text-secondary)] text-sm mb-6 leading-relaxed">
-                  上一个对话尚未结束。您希望如何处理这条新指令？
+                  {t('interrupt_question')}
                 </p>
                 <div className="flex flex-col gap-3">
                   <button 
@@ -911,7 +1489,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                     }}
                     className="w-full py-2.5 rounded-lg bg-[var(--accent-purple)]/10 border border-[var(--accent-purple)]/50 text-[var(--accent-purple)] font-bold hover:bg-[var(--accent-purple)]/20 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-sm"
                   >
-                    注入到上一条指令并重新生成
+                    {t('interrupt_inject')}
                   </button>
                   <button 
                     onClick={() => {
@@ -922,13 +1500,13 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                     }}
                     className="w-full py-2.5 rounded-lg bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/50 text-[var(--accent-cyan)] font-bold hover:bg-[var(--accent-cyan)]/20 hover:shadow-[0_0_15px_rgba(0,242,254,0.3)] transition-all text-sm"
                   >
-                    加入排队队列 (稍后自动执行)
+                    {t('interrupt_queue')}
                   </button>
                   <button 
                     onClick={() => setInterruptPrompt(null)}
                     className="w-full py-2 mt-2 rounded-lg text-[var(--text-secondary)] hover:text-white transition-colors text-sm"
                   >
-                    取消
+                    {t('interrupt_cancel')}
                   </button>
                 </div>
               </motion.div>
