@@ -1,0 +1,54 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sidea-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      SIDEA_HOST: 0.0.0.0
+      SIDEA_PORT: 8000
+      SIDEA_RELOAD: "0"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-sidea-change-this-in-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    volumes:
+      - sidea_data:/data
+      - ./uploads:/app/uploads
+      - ./sandbox_workspace:/app/sandbox_workspace
+      - ./database:/app/database
+      - ./output:/app/output
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BASE_URL: ${VITE_BASE_URL:-http://localhost:8000}
+    container_name: sidea-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  sidea_data:
