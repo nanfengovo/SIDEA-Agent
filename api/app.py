@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from api.routes import chat, config, skills, upload, admin_skills, admin_prompts, admin_tools, history, knowledge, admin_rcs, admin_llm
+from api.routes import chat, config, skills, upload, admin_skills, admin_prompts, admin_tools, history, knowledge, admin_rcs, admin_llm, templates, admin_dashboard
 
 
 def _cors_origins() -> list[str]:
@@ -42,13 +42,17 @@ def create_app() -> FastAPI:
     app.include_router(admin_llm.router, prefix="/api", tags=["Admin LLM"])
     app.include_router(history.router, prefix="/api", tags=["History"])
     app.include_router(knowledge.router, prefix="/api", tags=["Knowledge"])
+    app.include_router(templates.router, prefix="/api", tags=["Dashboard Templates"])
+    app.include_router(admin_dashboard.router, prefix="/api", tags=["Admin Dashboard"])
 
     os.makedirs("uploads", exist_ok=True)
     os.makedirs("sandbox_workspace", exist_ok=True)
     os.makedirs("database", exist_ok=True)
     os.makedirs("output", exist_ok=True)
+    os.makedirs("output/dashboards", exist_ok=True)
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
     app.mount("/sandbox_workspace", StaticFiles(directory="sandbox_workspace"), name="sandbox_workspace")
+    app.mount("/output/dashboards", StaticFiles(directory="output/dashboards"), name="dashboard_output")
 
     @app.get("/health")
     def health():
@@ -71,6 +75,8 @@ def create_app() -> FastAPI:
             seed_nxp_erack_profile("config.db")
             ensure_llm_schema("config.db")
             seed_default_llm_profiles("config.db")
+            from dashboard.seed import seed_all
+            seed_all()
         except Exception as e:
             print(f"[startup] seed skipped: {e}")
 

@@ -312,15 +312,23 @@ export function applyThemeToOption(option: any, theme: string, language?: string
 
   cloned.backgroundColor = 'transparent';
   if (cloned.title) {
-    const titles = Array.isArray(cloned.title) ? cloned.title : [cloned.title];
-    titles.forEach((title: any) => {
-      title.textStyle = { ...(title.textStyle || {}), color: t.text };
-    });
+    if (typeof cloned.title === 'string') {
+      cloned.title = { text: cloned.title, textStyle: { color: t.text } };
+    } else {
+      const titles = Array.isArray(cloned.title) ? cloned.title : [cloned.title];
+      titles.forEach((title: any) => {
+        if (title && typeof title === 'object') {
+          title.textStyle = { ...(title.textStyle || {}), color: t.text };
+        }
+      });
+    }
   }
   if (cloned.legend) {
     const legends = Array.isArray(cloned.legend) ? cloned.legend : [cloned.legend];
     legends.forEach((legend: any) => {
-      legend.textStyle = { ...(legend.textStyle || {}), color: t.muted };
+      if (legend && typeof legend === 'object') {
+        legend.textStyle = { ...(legend.textStyle || {}), color: t.muted };
+      }
     });
   }
   paintAxis(cloned.xAxis);

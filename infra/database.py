@@ -176,8 +176,66 @@ def init_db(db_path: str = "config.db"):
         );
         """)
 
+        # 大屏看板分类
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_categories (
+            category_id   TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            description   TEXT DEFAULT '',
+            icon          TEXT DEFAULT 'layout',
+            sort_order    INTEGER DEFAULT 0,
+            is_enabled    INTEGER DEFAULT 1,
+            created_at    TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
+        # 大屏看板模板（含 ECharts JSON / 外链 / 原生 HTML）
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_templates (
+            template_id     TEXT PRIMARY KEY,
+            category_id     TEXT NOT NULL DEFAULT 'general',
+            name            TEXT NOT NULL,
+            description     TEXT DEFAULT '',
+            style           TEXT NOT NULL DEFAULT 'tech-blue',
+            scene           TEXT NOT NULL DEFAULT 'general',
+            template_type   TEXT NOT NULL DEFAULT 'json_dashboard',
+            has_3d          INTEGER DEFAULT 0,
+            preview_url     TEXT,
+            local_path      TEXT,
+            dashboard_json  TEXT,
+            source_id       TEXT DEFAULT 'sidea',
+            recommended_for TEXT DEFAULT '[]',
+            data_slots      TEXT DEFAULT '[]',
+            tags            TEXT DEFAULT '[]',
+            priority        INTEGER DEFAULT 50,
+            is_enabled      INTEGER DEFAULT 1,
+            created_at      TEXT DEFAULT (datetime('now','localtime')),
+            updated_at      TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
+        # 模板别名（支持 "amr command center" 等带空格名称）
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_template_aliases (
+            alias         TEXT PRIMARY KEY,
+            template_id   TEXT NOT NULL,
+            FOREIGN KEY(template_id) REFERENCES dashboard_templates(template_id) ON DELETE CASCADE
+        );
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_render_history (
+            render_id       TEXT PRIMARY KEY,
+            template_id     TEXT NOT NULL,
+            data_payload    TEXT,
+            output_path     TEXT,
+            status          TEXT,
+            created_at      TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
         conn.commit()
-    print("SQLite database initialized successfully (v3.0)")
+    print("SQLite database initialized successfully (v3.1)")
 
 def seed_default_config(db_path: str = "config.db"):
     """

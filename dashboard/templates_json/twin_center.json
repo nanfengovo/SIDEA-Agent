@@ -1,0 +1,95 @@
+{
+  "type": "dashboard",
+  "title": "T_TITLE",
+  "layout": "3x2",
+  "i18n": {
+    "zh-CN": {
+      "T_TITLE": "车间实时数字孪生监控大屏",
+      "T_P0": "厂区数字孪生主视图",
+      "T_P1": "产能与缺陷追踪",
+      "T_P2": "工艺能耗分布",
+      "T_P3": "刀具磨损寿命预测",
+      "T_P4": "核心三轴温度阵列"
+    },
+    "en": {
+      "T_TITLE": "Workshop Real-time Digital Twin Dashboard",
+      "T_P0": "Plant Digital Twin Main View",
+      "T_P1": "Capacity & Defect Tracking",
+      "T_P2": "Process Energy Distribution",
+      "T_P3": "Tool Wear Life Prediction",
+      "T_P4": "Core 3-Axis Temperature Array"
+    }
+  },
+  "panels": [
+    {
+      "id": "twin_main",
+      "title": "T_P0",
+      "span": { "col": 2, "row": 2 },
+      "option": {
+        "backgroundColor": "transparent",
+        "grid3D": {
+          "boxWidth": 100,
+          "boxDepth": 100,
+          "viewControl": { "projection": "perspective", "autoRotate": true, "autoRotateSpeed": 3 }
+        },
+        "xAxis3D": { "type": "value" },
+        "yAxis3D": { "type": "value" },
+        "zAxis3D": { "type": "value" },
+        "series": [{
+          "type": "scatter3D",
+          "symbolSize": 8,
+          "data": [[10,10,10],[20,15,12],[30,20,8],[40,25,15],[50,30,10],[15,35,20],[25,40,18],[35,45,22],[45,50,16],[55,55,14]],
+          "itemStyle": { "color": "#64ffda" }
+        }]
+      }
+    },
+    {
+      "id": "capacity",
+      "title": "T_P1",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 36, "right": 12, "top": 32, "bottom": 24 },
+        "legend": { "data": ["产量", "次品率"], "textStyle": { "color": "#94a3b8", "fontSize": 10 } },
+        "xAxis": { "type": "category", "data": ["08","10","12","14","16","18"], "axisLabel": { "color": "#64748b", "fontSize": 10 } },
+        "yAxis": [{ "type": "value", "axisLabel": { "color": "#64748b", "fontSize": 10 } }, { "type": "value", "axisLabel": { "color": "#64748b", "fontSize": 10, "formatter": "{value}%" } }],
+        "series": [
+          { "name": "产量", "type": "bar", "data": [120, 132, 101, 134, 90, 230], "itemStyle": { "color": "#3b82f6" } },
+          { "name": "次品率", "type": "line", "yAxisIndex": 1, "data": [1.2, 1.0, 1.5, 0.8, 1.1, 0.9], "lineStyle": { "color": "#f97316" } }
+        ]
+      }
+    },
+    {
+      "id": "energy",
+      "title": "T_P2",
+      "option": {
+        "backgroundColor": "transparent",
+        "series": [{ "type": "pie", "radius": ["35%", "58%"], "data": [
+          { "name": "切割", "value": 35 }, { "name": "焊接", "value": 28 },
+          { "name": "搬运", "value": 22 }, { "name": "其他", "value": 15 }
+        ], "label": { "color": "#cbd5e1", "fontSize": 10 } }]
+      }
+    },
+    {
+      "id": "tool_wear",
+      "title": "T_P3",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 36, "right": 12, "top": 32, "bottom": 24 },
+        "xAxis": { "type": "category", "data": ["T1","T2","T3","T4","T5"], "axisLabel": { "color": "#64748b", "fontSize": 10 } },
+        "yAxis": { "type": "value", "max": 100, "axisLabel": { "color": "#64748b", "fontSize": 10, "formatter": "{value}%" } },
+        "series": [{ "type": "bar", "data": [85, 72, 45, 91, 38], "itemStyle": { "color": "#a78bfa" } }]
+      }
+    },
+    {
+      "id": "temperature",
+      "title": "T_P4",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 36, "right": 12, "top": 32, "bottom": 24 },
+        "xAxis": { "type": "category", "data": ["X","Y","Z","A","B","C"], "axisLabel": { "color": "#64748b", "fontSize": 10 } },
+        "yAxis": { "type": "value", "axisLabel": { "color": "#64748b", "fontSize": 10 } },
+        "series": [{ "type": "line", "smooth": true, "data": [42, 45, 48, 44, 41, 46], "lineStyle": { "color": "#34d399" }, "areaStyle": { "color": "rgba(52,211,153,0.12)" } }]
+      }
+    }
+  ]
+}

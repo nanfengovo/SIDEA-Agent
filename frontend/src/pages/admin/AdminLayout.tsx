@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Settings, Cpu, Wrench, ArrowLeft, Cable, Brain } from 'lucide-react';
+import { Settings, Cpu, Wrench, ArrowLeft, Cable, Brain, LayoutDashboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ConfigManager from './ConfigManager';
 import SkillsManager from './SkillsManager';
 import ToolsViewer from './ToolsViewer';
 import RcsConnectorManager from './RcsConnectorManager';
 import LlmProviderManager from './LlmProviderManager';
+import DashboardTemplateManager from './DashboardTemplateManager';
 
 interface AdminLayoutProps {
   onExit: () => void;
@@ -16,6 +17,7 @@ export default function AdminLayout({ onExit }: AdminLayoutProps) {
   const [activeTab, setActiveTab] = useState('config');
 
   const navItems = [
+    { key: 'dashboard', icon: <LayoutDashboard size={18} />, label: '大屏看板', accent: 'cyan' },
     { key: 'config', icon: <Settings size={18} />, label: t('nav_config'), accent: 'cyan' },
     { key: 'llm', icon: <Brain size={18} />, label: t('nav_llm') || '模型连接器', accent: 'purple' },
     { key: 'rcs', icon: <Cable size={18} />, label: t('nav_rcs') || 'RCS 连接器', accent: 'blue' },
@@ -70,6 +72,7 @@ export default function AdminLayout({ onExit }: AdminLayoutProps) {
       <div className="flex-1 overflow-hidden relative bg-[url('/grid.svg')] bg-repeat bg-opacity-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[var(--bg-dark)]/80 pointer-events-none transition-colors duration-300"></div>
         <div className="relative z-10 h-full">
+          {activeTab === 'dashboard' && <DashboardTemplateManager />}
           {activeTab === 'config' && <ConfigManager />}
           {activeTab === 'llm' && <LlmProviderManager />}
           {activeTab === 'rcs' && <RcsConnectorManager />}
