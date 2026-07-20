@@ -339,6 +339,15 @@ def seed_default_skills(db_path: str = "config.db"):
             "bound_tools": '["text_to_sql", "export_excel", "generate_pdf", "generate_markdown", "abp_rest_api"]',
             "temperature": 0.1,
             "sort_order": 5,
+        },
+        {
+            "skill_id": "dashboard_designer",
+            "skill_name": "大屏可视化设计师",
+            "description": "管理多风格大屏模板，将 RCS 数据套入数字孪生/驾驶舱模板渲染",
+            "template_path": "skills/templates/dashboard_designer.md",
+            "bound_tools": '["list_dashboard_templates", "recommend_dashboard_template", "render_dashboard", "get_dashboard_stats", "fetch_task_stats", "fetch_agv_status", "fetch_alarms"]',
+            "temperature": 0.2,
+            "sort_order": 6,
         }
     ]
     

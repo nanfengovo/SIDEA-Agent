@@ -18,6 +18,12 @@ from tools.data_tools import clean_data, split_log, text_to_sql
 from tools.time_tools import get_current_time
 from tools.sandbox_tools import run_python_in_sandbox
 from tools.image_tools import generate_image
+from tools.dashboard_tools import (
+    list_dashboard_templates,
+    recommend_dashboard_template,
+    render_dashboard_tool,
+    get_dashboard_stats,
+)
 from integrations.rcs.semantic_tools import get_rcs_tool_map
 
 # 所有 skill 都默认挂载的基础工具（不需要在 DB 中逐一声明）
@@ -42,6 +48,10 @@ TOOL_MAP = {
     "text_to_sql": text_to_sql,
     "run_python_in_sandbox": run_python_in_sandbox,
     "generate_image": generate_image,
+    "list_dashboard_templates": list_dashboard_templates,
+    "recommend_dashboard_template": recommend_dashboard_template,
+    "render_dashboard": render_dashboard_tool,
+    "get_dashboard_stats": get_dashboard_stats,
 }
 
 # 合并 RCS 语义工具（fetch_task_stats / fetch_agv_status / fetch_alarms / rcs_*）

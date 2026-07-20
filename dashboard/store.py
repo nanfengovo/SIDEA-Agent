@@ -296,3 +296,44 @@ def get_stats() -> dict:
         "by_category": {r[0]: r[1] for r in by_cat},
         "by_style": {r[0]: r[1] for r in by_style},
     }
+
+
+def recommend_templates(purpose: str, *, prefer_3d: bool = False, limit: int = 5) -> list[dict]:
+    """根据用途描述推荐模板"""
+    purpose_lower = purpose.lower()
+    scene_hints = {
+        "rcs": ["rcs", "机器人", "自动化", "erack", "amr"],
+        "warehouse": ["仓储", "立库", "仓库", "erack", "wms", "立体库"],
+        "factory": ["工厂", "产线", "mes", "生产", "孪生"],
+        "logistics": ["物流", "agv", "调度", "运输"],
+        "cockpit": ["驾驶舱", "cxo", "管理", "汇报", "看板"],
+    }
+    matched_scene = next(
+        (s for s, kws in scene_hints.items() if any(k in purpose_lower for k in kws)),
+        None,
+    )
+    want_3d = prefer_3d or any(k in purpose_lower for k in ["3d", "孪生", "三维", "数字孪生"])
+    result = list_templates(scene=matched_scene, has_3d=True if want_3d else None, limit=limit * 3)
+    items = result["items"]
+    if not items and matched_scene:
+        items = list_templates(scene=matched_scene, limit=limit)["items"]
+    if not items:
+        items = list_templates(limit=limit)["items"]
+    scored: list[tuple[int, dict]] = []
+    for tpl in items:
+        score = tpl.get("priority", 0)
+        blob = " ".join(
+            (tpl.get("tags") or [])
+            + [tpl.get("name", "")]
+            + ([tpl.get("description")] if tpl.get("description") else [])
+        ).lower()
+        for token in purpose_lower.replace("，", " ").split():
+            if len(token) >= 2 and token in blob:
+                score += 10
+        if tpl.get("has_dashboard_json"):
+            score += 15
+        if tpl.get("has_3d") and want_3d:
+            score += 10
+        scored.append((score, tpl))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [t for _, t in scored[:limit]]
