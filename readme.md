@@ -19,8 +19,38 @@
 3.  **Agent 智能调度 (Skills)**：AI 具备意图识别能力，能够根据用户的自然语言提问（如“今天上午 PLC 为啥停机了？”），自主选择调用哪个日志解析器或哪个数据接口。
 4.  **高度配置化**：系统的核心运行参数（文件路径、正则规则、大模型参数、C# 接口地址等）必须实现全面外置配置化，避免硬编码。
 5.  **严格的资源管控**：保证在 16GB 无显卡环境下运行，不能影响现有的 TM 系统及 SQL Server/MySQL 数据库的正常运转。
+6.  **大屏模板管理（核心差异化）**：管理 50+ 多风格可视化模板（数字孪生/驾驶舱/数据大屏），本地模型分析数据 + 高级模板套版渲染，拉高本地 SLM 的视觉上限。
 
 ---
+
+## 2.1 大屏模板管理（Agent 魅力所在）
+
+**核心理念**：本地小模型的分析能力有限，但通过「数据注入高级模板」可以产出媲美商业大屏的视觉效果。
+
+| 能力 | 说明 |
+|------|------|
+| 模板库 | 67+ 模板，8 种风格，覆盖 RCS/仓储/工厂/物流/驾驶舱 |
+| 来源 | BigDataView、GoView、OneTwin、Meteor3D、DataEase、DataRoom、SIDEA 原生 |
+| 3D 孪生 | 6 个含 Three.js 数字孪生模板，含 Erack 3D 库位可视化 |
+| Agent 工具 | `list_dashboard_templates` / `recommend_dashboard_template` / `render_dashboard` |
+| 原生渲染 | 5 个 SIDEA 原生模板可本地一键渲染，无需克隆外部仓库 |
+
+**Agent 工作流**：
+```
+用户: "用科技蓝风格给早班自动化率做个驾驶舱"
+  → recommend_dashboard_template(purpose="自动化率驾驶舱")
+  → render_dashboard(template_id="sidea-rcs-cockpit-v1", data={...})
+  → 返回 preview_url 浏览器预览
+```
+
+**API 端点**（前缀 `/api/dashboard`）：
+- `GET /templates` — 分页筛选模板
+- `POST /templates/recommend` — 智能推荐
+- `POST /render` — 数据注入渲染
+- `GET /preview/{template_id}` — 预览
+- `POST /templates/sync` — 同步 catalog 到数据库
+
+初始化：`python3 scripts/init_sidea.py`
 
 ## 3. 多系统交互与架构设计
 ![img.png](img.png)

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{title}} · 数字孪生</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<style>
+:root {
+  --bg: {{theme_bg}}; --panel: {{theme_panel}}; --border: {{theme_border}};
+  --accent: {{theme_accent}}; --text: {{theme_text}}; --glow: {{theme_glow}};
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:"PingFang SC",sans-serif; overflow:hidden; height:100vh; }
+.layout { display:grid; grid-template-columns:280px 1fr 280px; grid-template-rows:auto 1fr auto; height:100vh; gap:8px; padding:8px; }
+.header { grid-column:1/-1; text-align:center; padding:10px; border:1px solid var(--border); background:var(--panel); box-shadow:var(--glow); }
+.header h1 { font-size:26px; color:var(--accent); letter-spacing:4px; }
+.side-panel { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px; overflow:hidden; display:flex; flex-direction:column; }
+.side-panel h3 { font-size:13px; color:var(--accent); margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px; }
+.center-3d { position:relative; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:#000; }
+#threeCanvas { width:100%; height:100%; display:block; }
+.stat-item { display:flex; justify-content:space-between; padding:6px 0; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.05); }
+.stat-val { color:var(--accent); font-weight:bold; }
+.footer { grid-column:1/-1; text-align:center; font-size:11px; opacity:0.5; }
+.chart-mini { height:120px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="header"><h1>{{title}}</h1><p style="font-size:12px;opacity:0.7;margin-top:4px;">{{subtitle}} · Erack 数字孪生 · {{shift_name}}</p></div>
+
+  <div class="side-panel">
+    <h3>自动化 KPI</h3>
+    <div class="stat-item"><span>综合自动化率</span><span class="stat-val">{{composite_automation_rate}}</span></div>
+    <div class="stat-item"><span>任务完成率</span><span class="stat-val">{{task_completion_rate}}</span></div>
+    <div class="stat-item"><span>人工介入率</span><span class="stat-val">{{manual_intervention_rate}}</span></div>
+    <div class="stat-item"><span>异常自愈率</span><span class="stat-val">{{auto_recovery_rate}}</span></div>
+    <div class="stat-item"><span>AGV稼动率</span><span class="stat-val">{{agv_utilization}}</span></div>
+    <div class="stat-item"><span>Erack利用率</span><span class="stat-val">{{erack_utilization}}</span></div>
+    <div class="chart-mini" id="miniTrend"></div>
+  </div>
+
+  <div class="center-3d"><canvas id="threeCanvas"></canvas></div>
+
+  <div class="side-panel">
+    <h3>告警 · 活跃 {{active_alarms}}</h3>
+    <div id="alarmBox"></div>
+    <h3 style="margin-top:12px;">Erack 库位状态</h3>
+    <div id="erackBox"></div>
+  </div>
+
+  <div class="footer">{{footer_note}}</div>
+</div>
+<script>
+const erackData = {{erack_status_json}};
+const alarmData = {{alarm_topn_json}};
+const trendData = {{trend_7d_json}};
+const accent = '{{theme_accent}}';
+
+// === Three.js Erack 3D 场景 ===
+const canvas = document.getElementById('threeCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+camera.position.set(8, 6, 10);
+camera.lookAt(0, 0, 0);
+
+const ambient = new THREE.AmbientLight(0x404040, 2);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 10, 5);
+scene.add(dirLight);
+
+// 地面网格
+const gridHelper = new THREE.GridHelper(16, 16, 0x64ffda, 0x222244);
+scene.add(gridHelper);
+
+// 生成 Erack 货架模型
+function createErack(x, z, id, stats) {
+  const group = new THREE.Group();
+  const frameGeo = new THREE.BoxGeometry(2, 3, 0.8);
+  const frameMat = new THREE.MeshPhongMaterial({ color: 0x334455, transparent: true, opacity: 0.8 });
+  const frame = new THREE.Mesh(frameGeo, frameMat);
+  frame.position.y = 1.5;
+  group.add(frame);
+
+  const slots = stats || { occupied: 8, empty: 4, error: 0 };
+  const total = slots.occupied + slots.empty + slots.error || 12;
+  for (let i = 0; i < Math.min(total, 12); i++) {
+    const row = Math.floor(i / 4), col = i % 4;
+    const boxGeo = new THREE.BoxGeometry(0.4, 0.3, 0.5);
+    let color = 0x00ff88;
+    if (i < slots.occupied) color = 0x00d4ff;
+    else if (i < slots.occupied + slots.error) color = 0xff3b30;
+    else color = 0x333344;
+    const box = new THREE.Mesh(boxGeo, new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.2 }));
+    box.position.set(-0.6 + col * 0.45, 0.4 + row * 0.5, 0);
+    group.add(box);
+  }
+  group.position.set(x, 0, z);
+  scene.add(group);
+  return group;
+}
+
+Object.entries(erackData || {"1":{occupied:12,empty:4,error:1},"2":{occupied:10,empty:6,error:0}}).forEach(([id, stats], idx) => {
+  createErack(-3 + idx * 6, 0, id, stats);
+});
+
+function resize3d() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize3d();
+window.addEventListener('resize', resize3d);
+
+let angle = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  angle += 0.003;
+  camera.position.x = Math.sin(angle) * 12;
+  camera.position.z = Math.cos(angle) * 12;
+  camera.lookAt(0, 1, 0);
+  renderer.render(scene, camera);
+}
+animate();
+
+// 告警
+const alarmBox = document.getElementById('alarmBox');
+(alarmData||[]).forEach(a => {
+  alarmBox.innerHTML += `<div class="stat-item"><span>${a.name}</span><span class="stat-val">${a.count}</span></div>`;
+});
+
+// Erack 汇总
+const erackBox = document.getElementById('erackBox');
+Object.entries(erackData||{}).forEach(([id, s]) => {
+  erackBox.innerHTML += `<div class="stat-item"><span>Erack ${id}</span><span class="stat-val">占${s.occupied}/空${s.empty}/错${s.error||0}</span></div>`;
+});
+
+// 迷你趋势
+const mini = echarts.init(document.getElementById('miniTrend'));
+mini.setOption({
+  grid:{top:5,right:5,bottom:20,left:30},
+  xAxis:{type:'category',data:(trendData.dates||[]).slice(-5),axisLabel:{color:'#888',fontSize:9}},
+  yAxis:{type:'value',show:false},
+  series:[{type:'line',smooth:true,data:(trendData.automation||[]).slice(-5),lineStyle:{color:accent,width:1.5},symbol:'none'}]
+});
+</script>
+</body>
+</html>

@@ -94,8 +94,66 @@ def init_db():
         )
         """)
 
+        #=====================
+        # 5. 大屏模板来源表
+        #=====================
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_template_sources
+        (
+            source_id TEXT PRIMARY KEY,
+            source_name TEXT NOT NULL,
+            source_type TEXT,
+            description TEXT,
+            repo_url TEXT,
+            preview_base_url TEXT,
+            license TEXT,
+            tags TEXT,
+            created_at TEXT
+        )
+        """)
+
+        #=====================
+        # 6. 大屏模板目录表（多风格/数字孪生/驾驶舱）
+        #=====================
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_templates
+        (
+            template_id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            style TEXT NOT NULL,
+            scene TEXT NOT NULL,
+            template_type TEXT NOT NULL,
+            has_3d INTEGER DEFAULT 0,
+            preview_url TEXT,
+            local_path TEXT,
+            recommended_for TEXT,
+            data_slots TEXT,
+            tags TEXT,
+            priority INTEGER DEFAULT 50,
+            is_enabled INTEGER DEFAULT 1,
+            created_at TEXT,
+            updated_at TEXT
+        )
+        """)
+
+        #=====================
+        # 7. 大屏渲染历史
+        #=====================
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_render_history
+        (
+            render_id TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL,
+            data_payload TEXT,
+            output_path TEXT,
+            status TEXT,
+            created_at TEXT
+        )
+        """)
+
         conn.commit()
-    print("SQLite database initialized successfully (v2.1)")
+    print("SQLite database initialized successfully (v2.2)")
 
 def seed_default_data():
     """
@@ -169,6 +227,28 @@ def seed_default_data():
                 json.dumps(["fetch_order_data", "fetch_agv_utilization", "generate_line_chart"]),
                 None,            # 不绑定，默认使用系统配置的 LLM
                 0.3,             # 图表分析可以适当增加一点温度
+                1,
+                now,
+                now
+            ),
+            (
+                "dashboard_designer",
+                "大屏可视化设计师",
+                "管理50+多风格大屏模板，将RCS分析数据套入数字孪生/驾驶舱模板渲染。",
+                "你是工业可视化大屏设计专家。当用户需要大屏、驾驶舱、数字孪生展示时：\n"
+                "1. 先调用 list_dashboard_templates 或 recommend_dashboard_template 选择合适模板；\n"
+                "2. 再调用 render_dashboard 将自动化率/KPI/告警等数据注入模板；\n"
+                "3. 优先推荐 jinja2_native 类型（可本地一键渲染）；\n"
+                "4. 需要3D/Erack孪生时推荐 has_3d=true 的模板；\n"
+                "5. 返回 preview_url 供用户查看。",
+                json.dumps([
+                    "list_dashboard_templates",
+                    "recommend_dashboard_template",
+                    "render_dashboard",
+                    "get_dashboard_stats"
+                ]),
+                "ollama_gemma",
+                0.2,
                 1,
                 now,
                 now
