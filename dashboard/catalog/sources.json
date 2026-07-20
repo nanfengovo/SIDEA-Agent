@@ -1,0 +1,112 @@
+[
+  {
+    "source_id": "bigdataview",
+    "source_name": "BigDataView",
+    "source_type": "html_static",
+    "description": "100+套大数据可视化炫酷大屏Html5模板，社区/政务/交通/金融/工业等全行业",
+    "repo_url": "https://github.com/iGaoWei/BigDataView",
+    "preview_base_url": "https://demo.eiun.net/web/",
+    "license": "MIT/Community",
+    "tags": ["可视化大屏", "数据大屏", "HTML5", "ECharts"]
+  },
+  {
+    "source_id": "goview",
+    "source_name": "GoView",
+    "source_type": "lowcode_json",
+    "description": "Vue3+TypeScript低代码数据可视化开发平台，拖拽式大屏设计",
+    "repo_url": "https://github.com/dromara/go-view",
+    "preview_base_url": "https://gitee.com/dromara/go-view",
+    "license": "MIT",
+    "tags": ["低代码", "可视化", "Vue3", "ECharts", "VChart"]
+  },
+  {
+    "source_id": "onetwin",
+    "source_name": "OneTwin 壹孪",
+    "source_type": "digital_twin_3d",
+    "description": "企业级低代码数字孪生可视化平台，Three.js+Cesium双引擎，智能工厂/智慧园区",
+    "repo_url": "https://github.com/1035141145/onetwin-open",
+    "preview_base_url": "https://onetwin.cn",
+    "license": "MIT No Attribution",
+    "tags": ["数字孪生", "3D可视化", "智能工厂", "Three.js", "Cesium"]
+  },
+  {
+    "source_id": "meteor3d",
+    "source_name": "Meteor3D",
+    "source_type": "digital_twin_3d",
+    "description": "Three.js+Vue3三维引擎低代码平台，数字孪生和IoT数据大屏",
+    "repo_url": "https://github.com/nikonikoCW/Meteor3DEditor",
+    "preview_base_url": "http://www.meteor3d.cn",
+    "license": "MIT",
+    "tags": ["数字孪生", "3D", "IoT", "低代码"]
+  },
+  {
+    "source_id": "tvtjs",
+    "source_name": "TvT.js (three-vue-tres)",
+    "source_type": "digital_twin_3d",
+    "description": "Three.js+Vue3+TresJS开源框架，数字孪生/工业可视化，永久免费商用",
+    "repo_url": "https://github.com/gioboa/three-vue-tres",
+    "preview_base_url": "https://github.com/gioboa/three-vue-tres",
+    "license": "Apache-2.0",
+    "tags": ["数字孪生", "Three.js", "Vue3", "工业可视化"]
+  },
+  {
+    "source_id": "dataease",
+    "source_name": "DataEase 模板市场",
+    "source_type": "bi_template",
+    "description": "200+高质量大屏模板，制造/零售/金融/物流等行业驾驶舱",
+    "repo_url": "https://github.com/dataease/dataease",
+    "preview_base_url": "https://templates.dataease.cn/",
+    "license": "GPL-3.0",
+    "tags": ["BI", "驾驶舱", "数据看板", "制造"]
+  },
+  {
+    "source_id": "dataroom",
+    "source_name": "DataRoom / Siwu-IoT-Views",
+    "source_type": "lowcode_json",
+    "description": "大屏分组管理、数据集接入、ECharts/G2Plot图表，IoT可视化平台",
+    "repo_url": "https://github.com/jonehoo/Siwu-IoT-Views",
+    "preview_base_url": "https://gitee.com/jonehoo/Siwu-IoT-Views",
+    "license": "Apache-2.0",
+    "tags": ["IoT", "大屏设计器", "分组管理", "工业看板"]
+  },
+  {
+    "source_id": "mes_viz",
+    "source_name": "MES智能工业可视化平台",
+    "source_type": "lowcode_json",
+    "description": "Spring Boot+Element UI工业看板设计工具，大屏分组/预览/数据集接入",
+    "repo_url": "https://github.com/itflash-z/MES-intelligent-industrial-visualization-platform",
+    "preview_base_url": "https://gitee.com/Rong_X/MES",
+    "license": "Apache-2.0",
+    "tags": ["MES", "工业看板", "生产驾驶舱"]
+  },
+  {
+    "source_id": "digital_twin_warehouse",
+    "source_name": "Digital-twin 智能仓储",
+    "source_type": "digital_twin_3d",
+    "description": "Three.js智能仓储3D数字孪生，货架/立库/AGV轨迹动画",
+    "repo_url": "https://github.com/aguisadventure/Digital-twin",
+    "preview_base_url": "https://github.com/aguisadventure/Digital-twin",
+    "license": "Internal POC",
+    "tags": ["智能仓储", "数字孪生", "AGV", "Three.js"]
+  },
+  {
+    "source_id": "wcs_front",
+    "source_name": "OpenWCS 仓储控制大屏",
+    "source_type": "vue_dashboard",
+    "description": "Vue3 WCS仓储控制系统前端，AGV/任务/地图/货架可视化",
+    "repo_url": "https://gitee.com/openwcs/wcs-front",
+    "preview_base_url": "https://gitee.com/openwcs/wcs-front",
+    "license": "Open Source",
+    "tags": ["WCS", "AGV", "仓储", "任务调度"]
+  },
+  {
+    "source_id": "sidea_native",
+    "source_name": "SIDEA 原生模板",
+    "source_type": "jinja2_native",
+    "description": "Agent项目内置模板，针对RCS/TM/Erack场景优化，支持数据槽位注入",
+    "repo_url": "internal://sidea/dashboard/templates/native",
+    "preview_base_url": "/api/dashboard/preview/",
+    "license": "Internal",
+    "tags": ["RCS", "Erack", "自动化率", "原生"]
+  }
+]

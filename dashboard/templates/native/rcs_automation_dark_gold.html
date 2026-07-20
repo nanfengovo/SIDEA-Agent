@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{title}}</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg: {{theme_bg}};
+  --panel: {{theme_panel}};
+  --border: {{theme_border}};
+  --accent: {{theme_accent}};
+  --accent2: {{theme_accent2}};
+  --text: {{theme_text}};
+  --glow: {{theme_glow}};
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.container { position: relative; z-index: 1; padding: 16px 24px; height: 100vh; display: flex; flex-direction: column; }
+.header {
+  text-align: center; padding: 12px 0 20px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--glow);
+}
+.header h1 {
+  font-size: 32px; letter-spacing: 6px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header p { font-size: 14px; opacity: 0.7; margin-top: 6px; }
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 16px 0; }
+.kpi-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; text-align: center;
+  box-shadow: var(--glow); position: relative; overflow: hidden;
+}
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+.kpi-label { font-size: 13px; opacity: 0.75; }
+.kpi-value { font-size: 28px; font-weight: bold; color: var(--accent); margin: 8px 0 4px; }
+.kpi-trend { font-size: 12px; opacity: 0.6; }
+.main-grid { flex: 1; display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 16px; min-height: 0; }
+.panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px; display: flex; flex-direction: column;
+  box-shadow: var(--glow);
+}
+.panel-title {
+  font-size: 14px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: var(--accent);
+}
+.chart-box { flex: 1; min-height: 0; }
+.center-stats { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; }
+.big-number {
+  text-align: center; padding: 20px;
+  background: radial-gradient(circle, rgba(255,255,255,0.05), transparent);
+}
+.big-number .num { font-size: 64px; font-weight: bold; color: var(--accent); line-height: 1; }
+.big-number .lbl { font-size: 16px; opacity: 0.8; margin-top: 8px; }
+.alarm-list { list-style: none; overflow-y: auto; flex: 1; }
+.alarm-list li {
+  display: flex; justify-content: space-between; padding: 8px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px;
+}
+.alarm-count { color: var(--accent); font-weight: bold; }
+.footer { text-align: center; font-size: 12px; opacity: 0.5; padding-top: 8px; }
+.corner { position: fixed; width: 20px; height: 20px; border-color: var(--accent); border-style: solid; z-index: 2; }
+.corner-tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+.corner-tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+.corner-bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+.corner-br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div><div class="corner corner-br"></div>
+<div class="container">
+  <div class="header">
+    <h1>{{title}}</h1>
+    <p>{{subtitle}} · {{shift_name}}</p>
+  </div>
+  <div class="kpi-row" id="kpiRow"></div>
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">7日自动化率趋势</div>
+      <div class="chart-box" id="chartTrend"></div>
+    </div>
+    <div class="panel center-stats">
+      <div class="big-number">
+        <div class="num">{{composite_automation_rate}}</div>
+        <div class="lbl">综合自动化率</div>
+      </div>
+      <div class="chart-box" id="chartGauge"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;font-size:13px;">
+        <div><div style="color:var(--accent);font-size:20px;font-weight:bold;">{{task_completion_rate}}</div>任务完成率</div>
+        <div><div style="color:var(--accent);font-size:20px;font-weight:bold;">{{agv_utilization}}</div>AGV稼动率</div>
+        <div><div style="color:var(--accent);font-size:20px;font-weight:bold;">{{erack_utilization}}</div>Erack利用率</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">告警 TopN · 活跃 {{active_alarms}}</div>
+      <ul class="alarm-list" id="alarmList"></ul>
+    </div>
+  </div>
+  <div class="footer">{{footer_note}}</div>
+</div>
+<script>
+const trendData = {{trend_7d_json}};
+const alarmData = {{alarm_topn_json}};
+const kpiCards = {{kpi_cards_json}};
+
+// KPI 卡片
+const kpiRow = document.getElementById('kpiRow');
+(kpiCards || []).forEach(c => {
+  const el = document.createElement('div');
+  el.className = 'kpi-card';
+  el.innerHTML = `<div class="kpi-label">${c.label}</div><div class="kpi-value">${c.value}</div><div class="kpi-trend">${c.trend || ''}</div>`;
+  kpiRow.appendChild(el);
+});
+
+// 趋势图
+const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+const chartTrend = echarts.init(document.getElementById('chartTrend'));
+chartTrend.setOption({
+  grid: { top: 20, right: 16, bottom: 24, left: 40 },
+  xAxis: { type: 'category', data: trendData.dates || [], axisLabel: { color: '#aaa' } },
+  yAxis: { type: 'value', min: 70, max: 100, axisLabel: { color: '#aaa', formatter: '{value}%' } },
+  series: [{
+    type: 'line', smooth: true, data: trendData.automation || [],
+    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+      colorStops: [{ offset: 0, color: accent + '66' }, { offset: 1, color: accent + '00' }] } },
+    lineStyle: { color: accent, width: 2 }, itemStyle: { color: accent }
+  }]
+});
+
+// 仪表盘
+const rate = parseFloat('{{composite_automation_rate}}') || 87.6;
+const chartGauge = echarts.init(document.getElementById('chartGauge'));
+chartGauge.setOption({
+  series: [{
+    type: 'gauge', startAngle: 200, endAngle: -20, min: 0, max: 100,
+    pointer: { show: true, length: '60%', width: 4 },
+    progress: { show: true, width: 14, itemStyle: { color: accent } },
+    axisLine: { lineStyle: { width: 14, color: [[1, 'rgba(255,255,255,0.1)']] } },
+    axisTick: { show: false }, splitLine: { show: false },
+    axisLabel: { color: '#888', distance: 20 },
+    detail: { show: false },
+    data: [{ value: rate }]
+  }]
+});
+
+// 告警列表
+const alarmList = document.getElementById('alarmList');
+(alarmData || []).forEach(a => {
+  const li = document.createElement('li');
+  li.innerHTML = `<span>${a.code} ${a.name}</span><span class="alarm-count">${a.count}</span>`;
+  alarmList.appendChild(li);
+});
+
+window.addEventListener('resize', () => { chartTrend.resize(); chartGauge.resize(); });
+</script>
+</body>
+</html>

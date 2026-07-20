@@ -2,9 +2,21 @@ import json
 
 from infra.database import get_connection
 from tools.log_tools import read_plc_log
+from tools.dashboard_tools import (
+    list_dashboard_templates,
+    recommend_dashboard_template,
+    render_dashboard_tool,
+    get_dashboard_stats,
+)
 
 _AGENT_ROLE_CACHE = {}
-_AGENT_TOOL_CACHE = {"read_plc_log": read_plc_log}
+_AGENT_TOOL_CACHE = {
+    "read_plc_log": read_plc_log,
+    "list_dashboard_templates": list_dashboard_templates,
+    "recommend_dashboard_template": recommend_dashboard_template,
+    "render_dashboard": render_dashboard_tool,
+    "get_dashboard_stats": get_dashboard_stats,
+}
 
 # 根据前端选择的role加载该角色拥有权限的工具
 def get_role_info(role_name:str)->dict:
