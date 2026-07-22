@@ -55,8 +55,10 @@ def create_app() -> FastAPI:
     os.makedirs("sandbox_workspace", exist_ok=True)
     os.makedirs("database", exist_ok=True)
     os.makedirs("output", exist_ok=True)
+    os.makedirs("output/dashboards", exist_ok=True)
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
     app.mount("/sandbox_workspace", StaticFiles(directory="sandbox_workspace"), name="sandbox_workspace")
+    app.mount("/output/dashboards", StaticFiles(directory="output/dashboards"), name="dashboard_output")
 
     @app.get("/health")
     def health():

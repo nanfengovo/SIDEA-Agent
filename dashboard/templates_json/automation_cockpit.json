@@ -1,0 +1,78 @@
+{
+  "type": "dashboard",
+  "title": "T_TITLE",
+  "layout": "2x2",
+  "i18n": {
+    "zh-CN": {
+      "T_TITLE": "自动化率综合驾驶舱",
+      "T_KPI1": "综合自动化率",
+      "T_KPI2": "任务完成率",
+      "T_P1": "7日自动化率趋势",
+      "T_P2": "告警 Top5"
+    },
+    "en": {
+      "T_TITLE": "Automation Rate Cockpit",
+      "T_KPI1": "Composite Automation",
+      "T_KPI2": "Task Completion",
+      "T_P1": "7-Day Automation Trend",
+      "T_P2": "Top 5 Alarms"
+    }
+  },
+  "panels": [
+    {
+      "id": "gauge_main",
+      "title": "T_KPI1",
+      "span": { "col": 1, "row": 1 },
+      "option": {
+        "backgroundColor": "transparent",
+        "series": [{
+          "type": "gauge",
+          "startAngle": 200,
+          "endAngle": -20,
+          "min": 0,
+          "max": 100,
+          "progress": { "show": true, "width": 12, "itemStyle": { "color": "#e8c547" } },
+          "axisLine": { "lineStyle": { "width": 12, "color": [[1, "rgba(255,255,255,0.08)"]] } },
+          "axisTick": { "show": false },
+          "splitLine": { "show": false },
+          "axisLabel": { "color": "#888", "distance": 18 },
+          "detail": { "formatter": "{value}%", "color": "#e8c547", "fontSize": 22, "offsetCenter": [0, "70%"] },
+          "data": [{ "value": 87.6 }]
+        }]
+      }
+    },
+    {
+      "id": "trend",
+      "title": "T_P1",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 40, "right": 16, "top": 36, "bottom": 28 },
+        "xAxis": { "type": "category", "data": ["D-6","D-5","D-4","D-3","D-2","D-1","Today"], "axisLabel": { "color": "#94a3b8" } },
+        "yAxis": { "type": "value", "min": 70, "max": 100, "axisLabel": { "color": "#94a3b8", "formatter": "{value}%" } },
+        "series": [{ "type": "line", "smooth": true, "data": [82, 84, 83, 86, 85, 88, 87.6], "lineStyle": { "color": "#e8c547", "width": 2 }, "areaStyle": { "color": "rgba(232,197,71,0.12)" } }]
+      }
+    },
+    {
+      "id": "alarms",
+      "title": "T_P2",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 80, "right": 24, "top": 28, "bottom": 20 },
+        "xAxis": { "type": "value", "axisLabel": { "color": "#94a3b8" } },
+        "yAxis": { "type": "category", "data": ["Erack超时","AGV阻塞","物料不一致","PLC断连","TM异常"], "axisLabel": { "color": "#94a3b8", "fontSize": 10 } },
+        "series": [{ "type": "bar", "data": [8, 5, 3, 2, 1], "itemStyle": { "color": "#f87171" } }]
+      }
+    },
+    {
+      "id": "kpi_bar",
+      "title": "T_KPI2",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 40, "right": 16, "top": 36, "bottom": 28 },
+        "xAxis": { "type": "category", "data": ["完成率","介入率","自愈率","AGV","Erack"], "axisLabel": { "color": "#94a3b8", "fontSize": 10 } },
+        "yAxis": { "type": "value", "max": 100, "axisLabel": { "color": "#94a3b8", "formatter": "{value}%" } },
+        "series": [{ "type": "bar", "data": [94.2, 2.1, 91.5, 78.3, 82.0], "itemStyle": { "color": "#c9a227" } }]
+      }
+    }
+  ]
+}

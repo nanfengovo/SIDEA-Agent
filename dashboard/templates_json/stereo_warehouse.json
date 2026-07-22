@@ -1,0 +1,95 @@
+{
+  "type": "dashboard",
+  "title": "T_TITLE",
+  "layout": "2x2",
+  "i18n": {
+    "zh-CN": {
+      "T_TITLE": "立体库全景",
+      "T_P0": "3D 立体库全景 - 主视图",
+      "T_P1": "作业吞吐趋势",
+      "T_P2": "区域负载统计",
+      "T_P3": "设备状态分布",
+      "T_P2_X": ["Z1", "Z2", "Z3", "Z4"],
+      "T_P3_N": ["运行", "待机", "故障"]
+    },
+    "en": {
+      "T_TITLE": "Stereoscopic Warehouse Panorama",
+      "T_P0": "3D Warehouse - Main View",
+      "T_P1": "Throughput Trend",
+      "T_P2": "Zone Load Stats",
+      "T_P3": "Equipment Status",
+      "T_P2_X": ["Z1", "Z2", "Z3", "Z4"],
+      "T_P3_N": ["Running", "Idle", "Fault"]
+    }
+  },
+  "panels": [
+    {
+      "id": "warehouse3d",
+      "title": "T_P0",
+      "span": { "col": 2, "row": 2 },
+      "option": {
+        "backgroundColor": "transparent",
+        "grid3D": {
+          "boxWidth": 120,
+          "boxDepth": 80,
+          "boxHeight": 60,
+          "viewControl": { "autoRotate": true, "autoRotateSpeed": 4 }
+        },
+        "xAxis3D": { "type": "value", "min": 0, "max": 10 },
+        "yAxis3D": { "type": "value", "min": 0, "max": 8 },
+        "zAxis3D": { "type": "value", "min": 0, "max": 6 },
+        "series": [{
+          "type": "bar3D",
+          "data": [
+            [1,1,3],[2,1,4],[3,1,2],[4,1,5],[5,1,3],
+            [1,3,2],[2,3,5],[3,3,4],[4,3,3],[5,3,6],
+            [1,5,4],[2,5,3],[3,5,5],[4,5,2],[5,5,4],
+            [1,7,1],[2,7,3],[3,7,2],[4,7,4],[5,7,3]
+          ],
+          "shading": "lambert",
+          "itemStyle": { "color": "#22d3ee", "opacity": 0.85 }
+        }]
+      }
+    },
+    {
+      "id": "throughput",
+      "title": "T_P1",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 40, "right": 16, "top": 36, "bottom": 28 },
+        "xAxis": { "type": "category", "data": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "axisLabel": { "color": "#94a3b8" } },
+        "yAxis": { "type": "value", "axisLabel": { "color": "#94a3b8" } },
+        "series": [{ "type": "line", "smooth": true, "data": [820, 932, 901, 934, 1290, 1330, 1320], "lineStyle": { "color": "#22d3ee" }, "areaStyle": { "color": "rgba(34,211,238,0.15)" } }]
+      }
+    },
+    {
+      "id": "zone_load",
+      "title": "T_P2",
+      "option": {
+        "backgroundColor": "transparent",
+        "grid": { "left": 40, "right": 16, "top": 36, "bottom": 28 },
+        "xAxis": { "type": "category", "data": ["Z1","Z2","Z3","Z4"], "axisLabel": { "color": "#94a3b8" } },
+        "yAxis": { "type": "value", "axisLabel": { "color": "#94a3b8" } },
+        "series": [{ "type": "bar", "data": [72, 85, 68, 91], "itemStyle": { "color": { "type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1, "colorStops": [{ "offset": 0, "color": "#22d3ee" }, { "offset": 1, "color": "#0891b2" }] } } }]
+      }
+    },
+    {
+      "id": "device_status",
+      "title": "T_P3",
+      "option": {
+        "backgroundColor": "transparent",
+        "series": [{
+          "type": "pie",
+          "radius": ["42%", "62%"],
+          "center": ["50%", "52%"],
+          "data": [
+            { "name": "运行", "value": 68, "itemStyle": { "color": "#34d399" } },
+            { "name": "待机", "value": 24, "itemStyle": { "color": "#fbbf24" } },
+            { "name": "故障", "value": 8, "itemStyle": { "color": "#f87171" } }
+          ],
+          "label": { "color": "#e2e8f0", "fontSize": 11 }
+        }]
+      }
+    }
+  ]
+}

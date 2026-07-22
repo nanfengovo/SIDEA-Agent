@@ -357,7 +357,9 @@ export function applyThemeToOption(option: any, theme: string, language?: string
   if (cloned.legend) {
     const legends = Array.isArray(cloned.legend) ? cloned.legend : [cloned.legend];
     legends.forEach((legend: any) => {
-      legend.textStyle = { ...(legend.textStyle || {}), color: t.muted };
+      if (legend && typeof legend === 'object') {
+        legend.textStyle = { ...(legend.textStyle || {}), color: t.muted };
+      }
     });
   }
   paintAxis(cloned.xAxis);
