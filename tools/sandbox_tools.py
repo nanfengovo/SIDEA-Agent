@@ -123,6 +123,7 @@ def _run_python_in_sandbox_sync(python_code: str = "", files_to_copy: list[str] 
                 result_msg += (
                     f"\n\n[中间件拦截] 图表/大屏配置已生成！请在最终回复中直接原样输出以下代码块"
                     f"（仅包含URL，切勿输出 JSON 文本）来渲染：\n```echarts-i18n\n{url}\n```\n"
+                    f"（⚠️ 绝对严禁使用 Markdown 图片语法 `![]()` 包裹该 JSON 链接！否则会导致图片破损！）\n"
                     f"（若 JSON 为 type=dashboard 的 Panel Array，前端会自动四宫格渲染各独立面板。）\n"
                 )
                 continue

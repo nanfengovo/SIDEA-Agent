@@ -1,0 +1,20 @@
+{
+  "site_id": "zkxs_default",
+  "site_name": "中科星晟（ZKXS）默认现场",
+  "rcs_type": "ZKXS_Standard",
+  "abp_base_url": "http://localhost:5000",
+  "auth_token_env_key": "ABP_TOKEN",
+  "equipment_topology": {
+    "erack_count": 10,
+    "naming_rule": "ERACK-{id:02d}",
+    "slot_rows": 2,
+    "slot_cols": 4
+  },
+  "log_paths": {
+    "rcs": "/var/log/rcs/*.log",
+    "tm": "/var/log/tm/*.log"
+  },
+  "enabled_agent_roles": [
+    "RCSEfficiencyAnalyst"
+  ]
+}

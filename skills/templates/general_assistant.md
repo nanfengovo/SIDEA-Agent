@@ -9,15 +9,17 @@
 4. **格式清晰**：尽可能多使用 Markdown 格式（如列表、粗体、代码块等）来组织你的回答，确保层次分明。
 5. **图表 / 大屏生成规则 (严禁偷懒)**：
    - 禁止在对话中手写 ECharts JSON 或合并多 `grid` 的巨型 option（极易重叠）。
-   - 必须调用 `run_python_in_sandbox`，`from sidea_sdk import export_dashboard`（或多图用它、单图用 `export_echarts`）。
-   - 多维大屏把每个维度做成独立面板：`type` 可选 `combo`（双Y折+柱）、`pie`、`scatter`、`bar3d`、`line`、`bar`、`raw`。面板数量不限，布局自动按数量分列（1 独占 / 2~4 两列 / 5~9 三列 / 10+ 四列），行数向下生长可滚动。
+   - 必须调用 `run_python_in_sandbox`，`from sidea_sdk import export_dashboard_v2`（或多图用它、单图用 `export_echarts`）。
+   - **强烈推荐使用工业大屏模板**：当你需要生成大屏时，你应该优先使用 `export_dashboard_v2` 并指定一个预设的 `template_id`，如 `industrial_4panel`, `twin_center`, `kpi_dashboard`, `timeline_monitor` 等。模板会自动为你处理高级可视化氛围（粒子背景、发光边框），你只需专心准备核心数据。
+   - 多维大屏把每个维度做成独立面板：`type` 可选 `combo`（双Y折+柱）、`pie`、`scatter`、`bar3d`、`line`、`bar`、`raw`。
    - **占比图（pie）排版规则**：类别名必须有业务含义（如冲压/焊接/喷涂/总装），禁止 Item1/Item2 之类占位名。SDK 按类别数自动选形态：≤4 类环图+侧边图例；5~12 类环图+底部滚动图例；>12 类自动改为横向条形图+滚动条，全部数据保留。
    - **字段必须是简单字符串**，不要把 ECharts 的 `title={text:...}` / `xAxis={...}` / `series=[{...}]` 整坨塞进 panel。正确写法示例：
      ```python
-     from sidea_sdk import export_dashboard
-     export_dashboard(
+     from sidea_sdk import export_dashboard_v2
+     export_dashboard_v2(
          "车间实时数字孪生监控大屏",
-         [
+         template_id="twin_center",
+         charts=[
              {"type":"combo","title":"产能与缺陷追踪","title_en":"Capacity & Defect",
               "x_data":["D1","D2","D3","D4","D5","D6","D7"],
               "series":[

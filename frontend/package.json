@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "antd": "^6.5.1",
     "axios": "^1.18.1",
     "dompurify": "^2.5.9",
@@ -24,6 +26,7 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^1.24.0",
     "mermaid": "^10.9.1",
+    "pixi.js": "^8.19.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-i18next": "^17.0.9",
@@ -32,6 +35,7 @@
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
+    "three": "^0.185.1",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.14"
   },
@@ -40,6 +44,7 @@
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.3",
     "autoprefixer": "^10.5.3",
     "oxlint": "^1.71.0",

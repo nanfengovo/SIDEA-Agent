@@ -7,8 +7,10 @@ export type AppLanguage = 'zh' | 'zh-TW' | 'en' | 'ja';
 interface AppState {
   theme: 'dark' | 'light';
   language: AppLanguage;
+  enableAnimations: boolean;
   toggleTheme: () => void;
   setLanguage: (lang: AppLanguage) => void;
+  toggleAnimations: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -16,8 +18,10 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       theme: 'dark',
       language: 'zh',
+      enableAnimations: true,
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
       setLanguage: (lang) => set({ language: lang }),
+      toggleAnimations: () => set((state) => ({ enableAnimations: !state.enableAnimations })),
     }),
     {
       name: 'sidea-app-storage',

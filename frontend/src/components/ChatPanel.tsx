@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader, User, Cpu, Paperclip, Copy, MessageSquareReply, X, FileText, Image as ImageIcon, Check, Languages, Brain, Database, Download, FileDown, ImageDown, BookOpen, Layers } from 'lucide-react';
+import { Send, Loader, Loader2, User, Cpu, Paperclip, Copy, MessageSquareReply, X, FileText, Image as ImageIcon, Check, Languages, Brain, Database, Download, FileDown, ImageDown, BookOpen, Layers } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 import RunSummaryFooter, { EtaBanner, type RunSummary } from './RunSummaryFooter';
 import ActivityTimeline, { type Activity } from './ActivityTimeline';
@@ -37,6 +37,7 @@ interface Attachment {
 }
 
 const ToolTimer = ({ startTime }: { startTime: number }) => {
+  const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,7 +45,7 @@ const ToolTimer = ({ startTime }: { startTime: number }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, [startTime]);
-  return <div className="text-xs font-mono text-[var(--accent-cyan)]/80 bg-[var(--accent-cyan)]/10 px-2 py-1 rounded-md">耗时: {elapsed}s</div>;
+  return <div className="text-xs font-mono text-[var(--accent-cyan)]/80 bg-[var(--accent-cyan)]/10 px-2 py-1 rounded-md">{t('duration', { defaultValue: 'Elapsed' })}: {elapsed}s</div>;
 };
 
 function deriveSummaryFromTrace(events?: TraceEvent[]): RunSummary | undefined {
@@ -158,13 +159,43 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [contextTokens, setContextTokens] = useState(3200);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [showContextBreakdown, setShowContextBreakdown] = useState(false);
+  const [toolsMeta, setToolsMeta] = useState<Record<string, {name: string, description: string}>>({});
   const [targetLang, setTargetLang] = useState<TargetLang>('简体中文');
   const [langMenuFor, setLangMenuFor] = useState<string | null>(null);
   const [approvalData, setApprovalData] = useState<{ id: string, toolName: string, toolInput: any, reason: string } | null>(null);
+
   const [thinkingDepth, setThinkingDepth] = useState('auto');
   const [executionMode, setExecutionMode] = useState('auto'); // auto | goal | react
   const [contextLength, setContextLength] = useState('8k');
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(false);
+
+  // Derived context stats
+  const maxTokens = contextLength === '128k' ? 131072 : contextLength === '32k' ? 32768 : 8192;
+  const contextUsage = Math.min(100, Math.floor((contextTokens / maxTokens) * 100));
+
+  // 监听上限变化或 Token 激增，自动触发视觉压缩
+  useEffect(() => {
+    if (contextTokens > maxTokens * 0.85 && !isCompressing) {
+      setIsCompressing(true);
+      setTimeout(() => {
+        setContextTokens(Math.floor(maxTokens * 0.4));
+        setIsCompressing(false);
+      }, 2000);
+    }
+  }, [maxTokens, contextTokens, isCompressing]);
+  
+  const contextBreakdown = [
+    { key: 'ctx_sys_prompt', color: 'bg-gray-400', tokens: 450 },
+    { key: 'ctx_tools', color: 'bg-indigo-400', tokens: 800 },
+    { key: 'ctx_rules', color: 'bg-green-500', tokens: 300 },
+    { key: 'ctx_skills', color: 'bg-yellow-500', tokens: 800 },
+    { key: 'ctx_mcp', color: 'bg-pink-400', tokens: 600 },
+    { key: 'ctx_subagents', color: 'bg-blue-400', tokens: 250 },
+    { key: 'ctx_conversation', color: 'bg-red-400', tokens: Math.max(0, contextTokens - 3200) }
+  ];
   
   const [messageQueue, setMessageQueue] = useState<{text: string, attachments: Attachment[]}[]>([]);
   const [interruptPrompt, setInterruptPrompt] = useState<{text: string, attachments: Attachment[]} | null>(null);
@@ -702,6 +733,20 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
     setEtaInfo(null);
     onClear();
 
+    // simulate context usage
+    setContextTokens(prev => {
+      let next = prev + 500 + Math.floor(Math.random() * 800); // add 500-1300 tokens
+      const limit = maxTokens * 0.95;
+      if (next > maxTokens * 0.85) {
+         setIsCompressing(true);
+         setTimeout(() => {
+            setContextTokens(Math.floor(maxTokens * 0.4));
+            setIsCompressing(false);
+         }, 2000);
+      }
+      return next > limit ? limit : next;
+    });
+
     // 基于历史交互估算本次任务耗时
     fetch(`${getApiUrl()}/history/eta`, {
       method: 'POST',
@@ -821,12 +866,20 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                 setMessages(prev => prev.map(m => 
                   m.id === agentMsgId ? { ...m, runningToolName: event.data?.name || '未知工具', toolStartTime: Date.now() } : m
                 ));
+                // 压缩中间件触发时，启动全屏压缩动画
+                if (event.data?.name === 'ContextCompressor') {
+                  setIsCompressing(true);
+                }
               } else if (event.type === 'tool_end') {
                 updateActs(acts => closeRunningActs(acts, 'done'));
                 setMessages(prev => prev.map(m => 
                   m.id === agentMsgId ? { ...m, runningToolName: undefined } : m
                 ));
-                if (event.data?.name) {
+                // 压缩完成时，关闭全屏动画
+                if (event.data?.name === 'ContextCompressor') {
+                  setTimeout(() => setIsCompressing(false), 800);
+                  setContextTokens(prev => Math.floor(prev * 0.45)); // 视觉上让圆圈回落
+                } else {
                   notification.success({
                     message: `✅ 工具执行完成`,
                     description: `工具 [${event.data.name}] 已成功执行。`,
@@ -843,6 +896,9 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                 updateActs(acts => closeRunningActs(acts, 'done'));
               } else if (event.type === 'run_summary') {
                 // run_summary = 本轮结束的权威信号；立刻收口，避免"已完成"和"转圈"同时出现
+                if (event.data?.tokens?.input) {
+                   setContextTokens(event.data.tokens.input);
+                }
                 updateActs(acts => closeRunningActs(acts, 'done'));
                 setMessages(prev => prev.map(m =>
                   m.id === agentMsgId
@@ -957,7 +1013,7 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
       message.warning('图表链接无效（多为模型抄写了占位符）。请新开对话重试，并确认当前模型能可靠调用工具。', 6);
       return;
     }
-    const fixMessage = `[系统异常拦截]: 前端图表渲染完全崩溃！\n错误信息: ${errorMsg}\n\n**严重警告**：为了打破死循环，**禁止任何道歉、解释或“我正在执行”等废话！**\n你的回复必须【第一行就立刻发起工具调用】，调用 \`run_python_in_sandbox\`！严禁在对话中手写 JSON 或 Python 字典！对于复杂图表，请在沙箱中写 Python 代码构建 option，并用 \`from sidea_sdk import export_dashboard\` 导出，保存后原样输出沙箱返回的 URL 代码块！严禁编造或抄写 chart_xxxx 这类占位符！`;
+    const fixMessage = `[系统异常拦截]: 前端图表渲染完全崩溃！\n错误信息: ${errorMsg}\n\n**严重警告**：为了打破死循环，**禁止任何道歉、解释或“我正在执行”等废话！**\n你的回复必须【第一行就立刻发起工具调用】，调用 \`run_python_in_sandbox\`！请在沙箱中修复你刚才写错的代码，并使用 \`export_echarts\` (单图) 或 \`export_dashboard\` (大屏) 导出，保存后原样输出沙箱返回的 URL 代码块！`;
     handleSubmit(undefined, { text: fixMessage, attachments: [] }, true);
     message.warning('图表渲染失败，正在要求助手重新调用沙箱…', 4);
   }, [handleSubmit]);
@@ -970,7 +1026,109 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
       onDrop={handleDrop}
     >
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[var(--accent-cyan)] rounded-full blur-[120px] opacity-[0.03] pointer-events-none z-0"></div>
-      
+
+      {/* 上下文压缩全屏动画叠加层 */}
+      <AnimatePresence>
+        {isCompressing && (
+          <motion.div
+            key="compress-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 z-[999] flex flex-col items-center justify-center pointer-events-none overflow-hidden"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.18) 0%, rgba(10,12,18,0.85) 70%)' }}
+          >
+            {/* 扫描光束动画 */}
+            <motion.div
+              className="absolute inset-0"
+              style={{
+                background: 'linear-gradient(180deg, transparent 0%, rgba(139,92,246,0.12) 50%, transparent 100%)',
+                backgroundSize: '100% 60px',
+              }}
+              animate={{ backgroundPositionY: ['0px', '100%'] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+            />
+
+            {/* 中央图标区域 */}
+            <motion.div
+              className="relative flex flex-col items-center gap-4"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
+            >
+              {/* 外环旋转 */}
+              <div className="relative w-24 h-24 flex items-center justify-center">
+                <motion.div
+                  className="absolute inset-0 rounded-full border-2 border-[var(--accent-purple)] border-t-transparent opacity-60"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                />
+                <motion.div
+                  className="absolute inset-2 rounded-full border border-[var(--accent-cyan)] border-b-transparent opacity-40"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                />
+                {/* 中心脑图标（使用文字符号） */}
+                <motion.span
+                  className="text-3xl select-none"
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  🧠
+                </motion.span>
+              </div>
+
+              {/* 文字说明 */}
+              <div className="text-center">
+                <motion.p
+                  className="text-[var(--accent-purple)] font-medium text-sm tracking-widest uppercase"
+                  animate={{ opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  智能压缩记忆中
+                </motion.p>
+                <p className="text-[var(--text-secondary)] text-xs mt-1 opacity-70">正在提炼关键信息，释放上下文空间…</p>
+              </div>
+
+              {/* 进度条（从满到空的动画） */}
+              <div className="w-48 h-1 rounded-full bg-[var(--border-color)] overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: 'linear-gradient(90deg, var(--accent-purple), var(--accent-cyan))' }}
+                  initial={{ width: '85%' }}
+                  animate={{ width: '20%' }}
+                  transition={{ duration: 1.5, ease: 'easeOut' }}
+                />
+              </div>
+            </motion.div>
+
+            {/* 粒子效果 */}
+            {[...Array(8)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-1 h-1 rounded-full bg-[var(--accent-purple)] opacity-60"
+                style={{
+                  left: `${15 + i * 10}%`,
+                  top: `${30 + (i % 3) * 15}%`,
+                }}
+                animate={{
+                  y: [0, -30, 0],
+                  opacity: [0, 0.8, 0],
+                  scale: [0, 1.5, 0],
+                }}
+                transition={{
+                  duration: 1.8,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                  ease: 'easeInOut',
+                }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {isDragging && (
         <div className="absolute inset-0 z-50 bg-[var(--bg-panel)]/80 backdrop-blur-sm border-2 border-dashed border-[var(--accent-cyan)] rounded-xl flex items-center justify-center">
           <div className="text-center text-[var(--accent-cyan)]">
@@ -1349,14 +1507,52 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
           <div className="flex-1 relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-[var(--accent-cyan)] to-[var(--accent-blue)] rounded-xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
             
-            {isTyping && (
+            {isTyping && !interruptPrompt && (
               <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
                 <button 
                   type="button" 
                   onClick={handleStop}
-                  className="flex items-center gap-2 bg-[#1a1b26] border border-red-500/50 text-red-500 hover:bg-red-500/20 px-4 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all text-xs font-bold"
+                  className="flex items-center gap-2 bg-[var(--bg-secondary)] border border-red-500/50 text-red-500 hover:bg-red-500/20 px-4 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all text-xs font-bold"
                 >
                   <div className="w-2.5 h-2.5 bg-red-500 rounded-sm"></div> {t('stop_generating')}
+                </button>
+              </div>
+            )}
+            
+            {interruptPrompt && (
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 whitespace-nowrap">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    handleStop();
+                    const task = interruptPrompt;
+                    setInterruptPrompt(null);
+                    setTimeout(() => handleSubmit(undefined, task, true), 100);
+                  }}
+                  className="flex items-center justify-center bg-[var(--bg-secondary)] border border-red-500/50 text-red-500 hover:bg-red-500/20 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all text-sm font-bold min-w-[100px]"
+                >
+                  替换
+                </button>
+                
+                <button 
+                  type="button" 
+                  onClick={handleStop}
+                  className="flex items-center justify-center gap-2 bg-[var(--bg-secondary)] border border-[var(--text-secondary)]/30 text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-secondary)]/50 px-4 py-2 rounded-full transition-all text-xs"
+                >
+                  <div className="w-2 h-2 bg-red-500 rounded-sm"></div> {t('stop_generating')}
+                </button>
+                
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setMessageQueue(prev => [...prev, interruptPrompt]);
+                    setInterruptPrompt(null);
+                    setInput('');
+                    setAttachments([]);
+                  }}
+                  className="flex items-center justify-center bg-[var(--bg-secondary)] border border-green-500/50 text-green-500 hover:bg-green-500/20 px-6 py-2 rounded-full shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all text-sm font-bold min-w-[100px]"
+                >
+                  引导
                 </button>
               </div>
             )}
@@ -1381,44 +1577,44 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
               <div className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
                 thinkingDepth === 'deep' ? 'text-[var(--accent-purple)] border-[var(--accent-purple)]/50 bg-[var(--accent-purple)]/10' :
                 thinkingDepth === 'fast' ? 'text-green-400 border-green-400/50 bg-green-400/10' :
-                'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-black/40 hover:text-[var(--accent-cyan)] hover:border-[var(--accent-cyan)]/60'
+                'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-[var(--bg-secondary)] hover:text-[var(--accent-cyan)] hover:border-[var(--accent-cyan)]/60'
               }`} title="思考深度 / 策略">
                 <Brain size={12} className="mr-1" />
                 <select value={thinkingDepth} onChange={(e) => setThinkingDepth(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
-                  <option value="auto" className="bg-[#1a1b26] text-gray-300">{t('depth_auto')}</option>
-                  <option value="deep" className="bg-[#1a1b26] text-[var(--accent-purple)]">{t('depth_deep')}</option>
-                  <option value="fast" className="bg-[#1a1b26] text-green-400">{t('depth_fast')}</option>
+                  <option value="auto" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">{t('depth_auto')}</option>
+                  <option value="deep" className="bg-[var(--bg-secondary)] text-[var(--accent-purple)]">{t('depth_deep')}</option>
+                  <option value="fast" className="bg-[var(--bg-secondary)] text-green-400">{t('depth_fast')}</option>
                 </select>
               </div>
               <div className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
                 executionMode === 'goal' ? 'text-[var(--accent-cyan)] border-[var(--accent-cyan)]/50 bg-[var(--accent-cyan)]/10' :
                 executionMode === 'react' ? 'text-orange-400 border-orange-400/50 bg-orange-400/10' :
-                'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-black/40 hover:text-[var(--accent-cyan)] hover:border-[var(--accent-cyan)]/60'
+                'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-[var(--bg-secondary)] hover:text-[var(--accent-cyan)] hover:border-[var(--accent-cyan)]/60'
               }`} title={t('exec_hint') || '执行模式：自动识别大屏并拆分子任务'}>
                 <Layers size={12} className="mr-1" />
                 <select value={executionMode} onChange={(e) => setExecutionMode(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
-                  <option value="auto" className="bg-[#1a1b26] text-gray-300">{t('exec_auto') || '执行: 自动'}</option>
-                  <option value="goal" className="bg-[#1a1b26] text-[var(--accent-cyan)]">{t('exec_goal') || '执行: 目标拆分'}</option>
-                  <option value="react" className="bg-[#1a1b26] text-orange-400">{t('exec_react') || '执行: 自由 ReAct'}</option>
+                  <option value="auto" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">{t('exec_auto') || '执行: 自动'}</option>
+                  <option value="goal" className="bg-[var(--bg-secondary)] text-[var(--accent-cyan)]">{t('exec_goal') || '执行: 目标拆分'}</option>
+                  <option value="react" className="bg-[var(--bg-secondary)] text-orange-400">{t('exec_react') || '执行: 自由 ReAct'}</option>
                 </select>
               </div>
               <div className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
                 contextLength === '128k' ? 'text-red-400 border-red-400/50 bg-red-400/10' :
                 contextLength === '32k' ? 'text-orange-400 border-orange-400/50 bg-orange-400/10' :
-                'text-[var(--text-secondary)] border-[var(--accent-purple)]/30 bg-black/40 hover:text-[var(--accent-purple)] hover:border-[var(--accent-purple)]/60'
+                'text-[var(--text-secondary)] border-[var(--accent-purple)]/30 bg-[var(--bg-secondary)] hover:text-[var(--accent-purple)] hover:border-[var(--accent-purple)]/60'
               }`} title="上下文长度">
                 <Database size={12} className="mr-1" />
                 <select value={contextLength} onChange={(e) => setContextLength(e.target.value)} className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium">
-                  <option value="8k" className="bg-[#1a1b26] text-gray-300">{t('ctx_8k')}</option>
-                  <option value="32k" className="bg-[#1a1b26] text-orange-400">{t('ctx_32k')}</option>
-                  <option value="128k" className="bg-[#1a1b26] text-red-400">{t('ctx_128k')}</option>
+                  <option value="8k" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">{t('ctx_8k')}</option>
+                  <option value="32k" className="bg-[var(--bg-secondary)] text-orange-400">{t('ctx_32k')}</option>
+                  <option value="128k" className="bg-[var(--bg-secondary)] text-red-400">{t('ctx_128k')}</option>
                 </select>
               </div>
               <div 
                 onClick={() => setUseKnowledgeBase(!useKnowledgeBase)}
                 className={`flex items-center border rounded-md px-2 py-1.5 text-[11px] transition-colors cursor-pointer ${
                   useKnowledgeBase ? 'text-[var(--accent-blue)] border-[var(--accent-blue)]/50 bg-[var(--accent-blue)]/10 shadow-[0_0_10px_rgba(79,172,254,0.2)]' :
-                  'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-black/40 hover:text-[var(--accent-blue)] hover:border-[var(--accent-blue)]/60'
+                  'text-[var(--text-secondary)] border-[var(--accent-cyan)]/30 bg-[var(--bg-secondary)] hover:text-[var(--accent-blue)] hover:border-[var(--accent-blue)]/60'
                 }`} 
                 title="本地增强知识库 (RAG)"
               >
@@ -1438,15 +1634,83 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
                     onChange={(e) => onPermissionModeChange(e.target.value)} 
                     className="bg-transparent outline-none cursor-pointer appearance-none text-center font-medium"
                   >
-                    <option value="ask_always" className="bg-[#1a1b26] text-red-400">{t('perm_ask_always')}</option>
-                    <option value="ask_risky" className="bg-[#1a1b26] text-orange-400">{t('perm_ask_risky')}</option>
-                    <option value="full_access" className="bg-[#1a1b26] text-green-400">{t('perm_full')}</option>
+                    <option value="ask_always" className="bg-[var(--bg-secondary)] text-red-400">{t('perm_ask_always')}</option>
+                    <option value="ask_risky" className="bg-[var(--bg-secondary)] text-orange-400">{t('perm_ask_risky')}</option>
+                    <option value="full_access" className="bg-[var(--bg-secondary)] text-green-400">{t('perm_full')}</option>
                   </select>
                 </div>
               )}
             </div>
           </div>
           
+          <div className="relative flex items-center justify-center">
+            <Tooltip title={isCompressing ? '压缩上下文中...' : `${contextUsage}% Full ~${(contextTokens/1000).toFixed(1)}k / ${contextLength} Tokens`}>
+              <div 
+                className="flex items-center justify-center relative w-10 h-[60px] flex-shrink-0 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+                onClick={() => setShowContextBreakdown(!showContextBreakdown)}
+              >
+                <svg className="w-6 h-6 transform -rotate-90" viewBox="0 0 24 24">
+                  <circle className="text-gray-700" strokeWidth="3" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
+                  <circle 
+                     className={`${isCompressing ? 'text-[var(--accent-purple)] animate-pulse' : 'text-[var(--accent-cyan)]'} transition-all duration-1000 ease-out`} 
+                     strokeWidth="3" 
+                     strokeDasharray="62.83" 
+                     strokeDashoffset={isCompressing ? 0 : 62.83 - (contextUsage / 100) * 62.83}
+                     strokeLinecap="round" 
+                     stroke="currentColor" 
+                     fill="transparent" 
+                     r="10" 
+                     cx="12" 
+                     cy="12" 
+                  />
+                </svg>
+                {isCompressing && (
+                  <Loader2 size={10} className="absolute text-[var(--accent-purple)] animate-spin" />
+                )}
+              </div>
+            </Tooltip>
+
+            <AnimatePresence>
+              {showContextBreakdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute bottom-full right-0 mb-2 w-72 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden z-50 text-sm font-sans"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+                    <span className="text-[var(--text-primary)] font-medium">{t('ctx_usage_title') || 'Context Usage'}</span>
+                    <button onClick={() => setShowContextBreakdown(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"><X size={16}/></button>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <span className="text-[var(--text-secondary)]">{contextUsage}% Full</span>
+                      <span className="text-[var(--text-secondary)] opacity-70">~{(contextTokens/1000).toFixed(1)}K / {contextLength} Tokens</span>
+                    </div>
+                    
+                    <div className="flex w-full h-2 rounded-full overflow-hidden mb-5 bg-[var(--bg-primary)] border border-[var(--border-color)]">
+                      {contextBreakdown.map((item, idx) => (
+                         <div key={idx} className={`h-full ${item.color}`} style={{ width: `${Math.max(2, (item.tokens / contextTokens) * 100)}%` }}></div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {contextBreakdown.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-sm ${item.color}`}></div>
+                            <span className="text-[var(--text-primary)]">{t(item.key) || item.key}</span>
+                          </div>
+                          <span className="text-[var(--text-secondary)] font-mono">{(item.tokens >= 1000 ? (item.tokens/1000).toFixed(1) + 'K' : item.tokens)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <button 
             type="submit"
             disabled={(!input.trim() && attachments.length === 0)}
@@ -1457,62 +1721,6 @@ export default function ChatPanel({ onEvent, onClear, onLoadTrace, skillId, sess
           </button>
         </form>
 
-        {/* Interrupt Prompt Modal */}
-        <AnimatePresence>
-          {interruptPrompt && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            >
-              <motion.div 
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.9, y: 20 }}
-                className="bg-[#12121a] border border-[var(--accent-cyan)]/30 p-6 rounded-2xl shadow-[0_0_30px_rgba(0,242,254,0.15)] max-w-sm w-full"
-              >
-                <div className="flex items-center gap-3 mb-4 text-[var(--accent-cyan)]">
-                  <Brain size={24} />
-                  <h3 className="text-lg font-bold tracking-wider">{t('ai_outputting')}</h3>
-                </div>
-                <p className="text-[var(--text-secondary)] text-sm mb-6 leading-relaxed">
-                  {t('interrupt_question')}
-                </p>
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => {
-                      handleStop();
-                      const task = interruptPrompt;
-                      setInterruptPrompt(null);
-                      setTimeout(() => handleSubmit(undefined, task, true), 100);
-                    }}
-                    className="w-full py-2.5 rounded-lg bg-[var(--accent-purple)]/10 border border-[var(--accent-purple)]/50 text-[var(--accent-purple)] font-bold hover:bg-[var(--accent-purple)]/20 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all text-sm"
-                  >
-                    {t('interrupt_inject')}
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setMessageQueue(prev => [...prev, interruptPrompt]);
-                      setInterruptPrompt(null);
-                      setInput('');
-                      setAttachments([]);
-                    }}
-                    className="w-full py-2.5 rounded-lg bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/50 text-[var(--accent-cyan)] font-bold hover:bg-[var(--accent-cyan)]/20 hover:shadow-[0_0_15px_rgba(0,242,254,0.3)] transition-all text-sm"
-                  >
-                    {t('interrupt_queue')}
-                  </button>
-                  <button 
-                    onClick={() => setInterruptPrompt(null)}
-                    className="w-full py-2 mt-2 rounded-lg text-[var(--text-secondary)] hover:text-white transition-colors text-sm"
-                  >
-                    {t('interrupt_cancel')}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
       {/* Approval Modal Overlay */}
       <AnimatePresence>

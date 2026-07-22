@@ -58,6 +58,7 @@ const en = {
   nav_rcs: 'RCS Connectors',
   nav_skills: 'Skills & Prompts',
   nav_tools: 'Tools Hub',
+  nav_templates: 'Dashboard Templates',
   exit_admin: 'Exit Console',
   cfg_title: 'Global Settings (Sys Config)',
   cfg_api_title: 'Frontend API Endpoint',
@@ -115,6 +116,16 @@ const en = {
   act_finished_with_error: 'Finished with errors',
   act_worked_for: 'Worked for',
   act_tool_calls: 'tool calls',
+
+  // Context Breakdown
+  ctx_usage_title: 'Context Usage',
+  ctx_sys_prompt: 'System prompt',
+  ctx_tools: 'Tool definitions',
+  ctx_rules: 'Rules',
+  ctx_skills: 'Skills',
+  ctx_mcp: 'MCP & dynamic tools',
+  ctx_subagents: 'Subagent definitions',
+  ctx_conversation: 'Conversation',
 };
 
 const zh = {
@@ -171,6 +182,7 @@ const zh = {
   nav_rcs: 'RCS 连接器',
   nav_skills: '技能 & 提示词',
   nav_tools: '工具总览',
+  nav_templates: '大屏模板管理',
   exit_admin: '退出管理台',
   cfg_title: '全局设置 (Sys Config)',
   cfg_api_title: '前端直连 API 地址配置',
@@ -226,6 +238,16 @@ const zh = {
   act_finished_with_error: '已结束（有异常）',
   act_worked_for: '用时',
   act_tool_calls: '次工具调用',
+
+  // Context Breakdown
+  ctx_usage_title: '上下文用量',
+  ctx_sys_prompt: '系统提示词',
+  ctx_tools: '工具定义',
+  ctx_rules: '全局规则',
+  ctx_skills: '加载技能',
+  ctx_mcp: 'MCP 与动态工具',
+  ctx_subagents: '子智能体',
+  ctx_conversation: '对话历史',
 };
 
 const zhTW = {
@@ -282,6 +304,7 @@ const zhTW = {
   nav_rcs: 'RCS 連接器',
   nav_skills: '技能 & 提示詞',
   nav_tools: '工具總覽',
+  nav_templates: '大屏模板管理',
   exit_admin: '退出管理台',
   cfg_title: '全局設置 (Sys Config)',
   cfg_api_title: '前端直連 API 地址配置',
@@ -337,6 +360,16 @@ const zhTW = {
   act_finished_with_error: '已結束（有異常）',
   act_worked_for: '用時',
   act_tool_calls: '次工具調用',
+
+  // Context Breakdown
+  ctx_usage_title: '上下文用量',
+  ctx_sys_prompt: '系統提示詞',
+  ctx_tools: '工具定義',
+  ctx_rules: '全局規則',
+  ctx_skills: '加載技能',
+  ctx_mcp: 'MCP 與動態工具',
+  ctx_subagents: '子智能體',
+  ctx_conversation: '對話歷史',
 };
 
 const ja = {
@@ -394,6 +427,7 @@ const ja = {
   nav_rcs: 'RCS コネクタ',
   nav_skills: 'スキル & プロンプト',
   nav_tools: 'ツール一覧',
+  nav_templates: 'ダッシュボードテンプレート',
   exit_admin: 'コンソールを終了',
   cfg_title: 'グローバル設定 (Sys Config)',
   cfg_api_title: 'フロントエンド API アドレス設定',
@@ -450,6 +484,16 @@ const ja = {
   act_finished_with_error: '終了（エラーあり）',
   act_worked_for: '所要時間',
   act_tool_calls: '回のツール呼び出し',
+
+  // Context Breakdown
+  ctx_usage_title: 'コンテキスト使用量',
+  ctx_sys_prompt: 'システムプロンプト',
+  ctx_tools: 'ツール定義',
+  ctx_rules: 'ルール',
+  ctx_skills: 'スキル',
+  ctx_mcp: 'MCPと動的ツール',
+  ctx_subagents: 'サブエージェント',
+  ctx_conversation: '会話履歴',
 };
 
 const resources = {

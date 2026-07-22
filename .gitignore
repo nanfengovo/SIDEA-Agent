@@ -24,6 +24,7 @@ sandbox_workspace/*
 !sandbox_workspace/sidea_sdk.py
 !sandbox_workspace/main.py
 !sandbox_workspace/demo_amr_dashboard.json
+!sandbox_workspace/demo_dsl_v2.json
 
 # Node / frontend
 frontend/node_modules/
@@ -48,6 +49,9 @@ server.log
 # Local scratch / ad-hoc debug scripts
 test_middleware.py
 test_wrapper.py
+scratch_test_cascadio.py
+trace_tail.txt
+server_start.log
 
 # Keep README media tracked
 !docs/screenshots/

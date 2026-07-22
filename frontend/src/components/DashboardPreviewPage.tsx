@@ -3,6 +3,8 @@ import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import { Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { applyThemeToOption, detectHeroSpan } from './DashboardPanel';
+import { DashboardV2 } from '../dashboard/DashboardV2';
+import { isDashboardDslV2 } from '../dashboard/types';
 import {
   isDashboardPreviewRoute,
   loadDashboardPreview,
@@ -34,7 +36,15 @@ export default function DashboardPreviewPage() {
       return;
     }
     const data = loadDashboardPreview(key);
-    if (!data || !Array.isArray(data.panels) || data.panels.length === 0) {
+    if (!data) {
+      setError('预览数据不存在或已过期，请回到原会话重新点击「新标签页」');
+      return;
+    }
+    if (data.dsl && isDashboardDslV2(data.dsl)) {
+      setPayload(data);
+      return;
+    }
+    if (!Array.isArray(data.panels) || data.panels.length === 0) {
       setError('预览数据不存在或已过期，请回到原会话重新点击「新标签页」');
       return;
     }
@@ -88,6 +98,49 @@ export default function DashboardPreviewPage() {
 
   const theme = payload.theme === 'light' ? 'light' : 'dark';
   const isDark = theme === 'dark';
+  const previewLang = payload.language || 'zh-CN';
+
+  if (payload.dsl && isDashboardDslV2(payload.dsl)) {
+    const btnStyle: React.CSSProperties = {
+      borderColor: isDark ? 'rgba(34,211,238,0.35)' : 'rgba(8,145,178,0.35)',
+      color: isDark ? '#22d3ee' : '#0891b2',
+      background: isDark ? 'rgba(34,211,238,0.06)' : 'rgba(8,145,178,0.05)',
+    };
+    return (
+      <div
+        className="h-screen w-screen flex flex-col overflow-hidden"
+        style={{
+          background: isDark ? '#0b1220' : '#f8fafc',
+          color: isDark ? '#e2e8f0' : '#0f172a',
+        }}
+      >
+        <header
+          className="shrink-0 flex items-center justify-between px-5"
+          style={{
+            height: 56,
+            borderBottom: `1px solid ${isDark ? 'rgba(34,211,238,0.18)' : 'rgba(15,23,42,0.08)'}`,
+          }}
+        >
+          <div className="font-bold tracking-wide" style={{ color: isDark ? '#22d3ee' : '#0891b2' }}>
+            {payload.title || payload.dsl.title || '工业监控大屏'}
+          </div>
+          <button
+            type="button"
+            onClick={toggleFs}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs"
+            style={btnStyle}
+          >
+            {isFs ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            {isFs ? '退出全屏' : '进入全屏'}
+          </button>
+        </header>
+        <div className="flex-1 min-h-0 overflow-auto p-2">
+          <DashboardV2 doc={payload.dsl} theme={theme} language={previewLang} fullscreen embedded />
+        </div>
+      </div>
+    );
+  }
+
   const n = payload.panels.length;
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
 

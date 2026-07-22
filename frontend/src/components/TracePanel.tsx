@@ -42,6 +42,7 @@ interface TraceNode {
   latency?: number;
   data?: any;
   startTime?: number;
+  description?: string;
 }
 
 interface TraceLayer {
@@ -161,7 +162,8 @@ export default function TracePanel({ events }: TracePanelProps) {
            label: 'AI 推理中',
            status: 'running',
            startTime: e.timestamp,
-           data: e.data
+           data: e.data,
+           description: e.data?.message || e.data?.description
         };
         newLayers.push({
            id: `layer-agent-${agentCount}`,
@@ -184,7 +186,8 @@ export default function TracePanel({ events }: TracePanelProps) {
            label: e.data?.name || '执行工具',
            status: 'running',
            startTime: e.timestamp,
-           data: e.data
+           data: e.data,
+           description: e.data?.message || e.data?.description
         });
       }
       else if (e.type === 'tool_end' || e.type === 'tool_error') {
@@ -350,7 +353,7 @@ export default function TracePanel({ events }: TracePanelProps) {
               >
                 <div ref={containerRef} className="relative w-full flex flex-col items-center pb-20">
                     <FlowConnections layers={layers} containerRef={containerRef} />
-                    {layers.map((layer, idx) => (
+                    {layers.map((layer) => (
                         <div key={layer.id} className="flex flex-row flex-wrap justify-center gap-12 my-10 z-10 w-full relative">
                             {layer.nodes.map(node => (
                                 <FlowNode 
@@ -483,6 +486,21 @@ function FlowNode({ node, onClick, isSelected }: { node: TraceNode, onClick: () 
     return <Play size={22} />;
   };
 
+  const [elapsed, setElapsed] = useState<number>(0);
+
+  useEffect(() => {
+    if (isRunning && node.startTime) {
+      const interval = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - node.startTime!) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isRunning, node.startTime]);
+
+  const displayTime = node.latency !== undefined 
+    ? (node.latency > 1000 ? `${(node.latency / 1000).toFixed(1)}s` : `${node.latency}ms`)
+    : (isRunning && elapsed > 0 ? `${elapsed}s` : null);
+
   return (
     <motion.div 
       id={node.id}
@@ -495,28 +513,38 @@ function FlowNode({ node, onClick, isSelected }: { node: TraceNode, onClick: () 
           <div className="absolute -inset-1.5 bg-gradient-to-r from-[var(--accent-blue)] to-[var(--accent-cyan)] rounded-2xl blur opacity-50 z-0 animate-pulse"></div>
       )}
       <div className={`
-        relative flex items-center justify-center gap-4 px-6 py-4 rounded-xl border-2 min-w-[240px] max-w-[300px]
+        relative flex items-center justify-center gap-4 px-6 py-4 rounded-xl border-2 min-w-[240px] max-w-[320px]
         backdrop-blur-xl overflow-hidden transition-all duration-500 hover:shadow-[0_0_25px_rgba(0,242,254,0.4)]
         ${borderGlow} ${innerBg} ${isSelected ? 'border-[var(--accent-cyan)] shadow-[0_0_30px_rgba(0,242,254,0.3)]' : ''}
       `}>
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none rounded-xl"></div>
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
         
-        <div className="relative z-10 flex items-center justify-center bg-black/40 p-2 rounded-lg border border-white/5">
+        <div className="relative z-10 flex items-center justify-center bg-black/40 p-2 rounded-lg border border-white/5 shrink-0">
            {getIcon()}
         </div>
         
-        <span className="font-bold tracking-widest text-sm z-10 uppercase flex-1 truncate">{node.label}</span>
+        <div className="flex flex-col flex-1 overflow-hidden z-10">
+          <span className="font-bold tracking-widest text-sm uppercase truncate">{node.label}</span>
+          {node.description && (
+            <span className="text-[10px] text-gray-400 truncate mt-0.5" title={node.description}>
+              {node.description}
+            </span>
+          )}
+        </div>
 
-        {isSuccess && <Check size={18} className="text-green-400 z-10" />}
-        {isRunning && <Loader2 size={18} className="animate-spin z-10" />}
-
-        {node.latency !== undefined && (
-          <div className="absolute -right-2 -top-2 bg-black border border-[var(--accent-cyan)]/50 text-[10px] text-[var(--accent-cyan)] font-mono px-2 py-0.5 rounded-full z-20 shadow-[0_0_10px_rgba(0,242,254,0.3)]">
-            {node.latency}ms
-          </div>
-        )}
+        <div className="shrink-0 z-10">
+          {isSuccess && <Check size={18} className="text-green-400" />}
+          {isRunning && <Loader2 size={18} className="animate-spin text-[var(--accent-purple)]" />}
+          {isError && <X size={18} className="text-red-500" />}
+        </div>
       </div>
+
+      {displayTime && (
+        <div className={`absolute -right-2 -top-2 bg-black border ${isRunning ? 'border-[var(--accent-purple)]/50 text-[var(--accent-purple)] shadow-[0_0_10px_rgba(179,0,255,0.3)]' : 'border-[var(--accent-cyan)]/50 text-[var(--accent-cyan)] shadow-[0_0_10px_rgba(0,242,254,0.3)]'} text-[10px] font-mono px-2 py-0.5 rounded-full z-20`}>
+          {displayTime}
+        </div>
+      )}
     </motion.div>
   );
 }

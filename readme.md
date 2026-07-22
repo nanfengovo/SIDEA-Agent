@@ -30,11 +30,14 @@
 | --- | --- |
 | **工业系统接入** | 用 Profile + Operation Binding 将不同 RCS / AMR HTTP API 映射为稳定语义能力，无需为每个项目重写 Agent |
 | **多模型统一管理** | 在管理后台配置 Ollama、OpenAI、Gemini 和 OpenAI-compatible 中转站，测试并一键切换 Active Profile |
-| **模型分级出图** | 小模型走稳定模板；商业/强模型自由生成完整 ECharts，自动校验并在失败时回退 |
+| **模型分级出图** | 小模型走 DSL 模板；商业模型自由编排 DSL；3D/孪生意向走沙箱 Three.js 场景 |
+| **Agentic Graph RAG 拓扑图** | 自动提取设备 (Device)、故障 (Fault)、解决方案 (Solution) 与经验链，支持**点击节点子图高亮动画**、0.3x~2.0x 缩放灵敏度及斥力间距调节 |
+| **向量切片与语义检索** | 实时查看 384-D BGE Vector Embedding 样本明细与相似度匹配 |
+| **经验沉淀与 AI 自动审核** | 自动提取对话排查经验，支持人工确认与自定义 Prompt 规则 AI 自动入库 |
 | **数字孪生大屏** | AMR 厂区仿真地图、动态路径、车辆状态、3D 负载、OEE、自动化率、任务效率 |
 | **执行过程可见** | SSE 流式输出，完整展示思考、工具调用、耗时、Token、成功/失败和最终总结 |
-| **本地与离线友好** | 支持 Ollama、本地 RAG、SQLite、离线矢量封面；适合隔离网络和工厂内网 |
-| **可运营的工作台** | 会话文件夹、多语言 UI、技能与 Prompt 管理、连接器管理、历史度量和 ETA 预估 |
+| **操作日志与审计中心** | 记录人工操作、自动任务、出入站 API 请求，提供 JSON 结构化调试 |
+| **全局 UI 与标准分页** | 明暗双色高对比度主题适配，支持完整的分页、每页条数切换与快速跳转 |
 
 ## 🖥️ 产品预览
 
@@ -46,25 +49,32 @@
   <img src="docs/screenshots/demo-activity-timeline.gif" alt="Activity timeline demo" width="820" />
 </p>
 
+### Agentic Graph RAG 知识拓扑与向量管理
+
+知识库内置 5 大功能区：
+1. **文档库**：支持 PDF、DOCX、Excel、日志文件拖拽上传与自动向量化处理
+2. **向量与切片明细**：查看文本切片、384-D Float32 Vector 样本及实时语义相似度检索
+3. **知识关联图谱 (Graph RAG)**：实体拓扑链展示，支持**点击节点关联高亮+虚化动画**、缩放灵敏度 (0.3x~2.0x)、节点斥力间距 slider 及边关系开关
+4. **经验沉淀审核**：工控排查经验人工审核入库
+5. **自动审核规则**：配置 AI 自主审查 Prompt
+
+![Agentic Graph RAG 实体拓扑关联图](docs/screenshots/05-graph-rag.jpg)
+
 ### 工业数字孪生大屏
 
 Agent 可把业务需求和 RCS 数据转换为交互式 Dashboard，并支持全屏、新标签页、主题切换以及 JSON / 图片 / PDF 导出。
 
 ![SIDEA 数字孪生大屏](docs/screenshots/06-dashboard.png)
 
-### 管理后台：不用改代码切换模型和能力
+### 管理后台与日志中心
 
-<p align="center">
-  <img src="docs/screenshots/demo-admin.gif" alt="SIDEA admin demo" width="820" />
-</p>
+- **LLM Provider Profile**：Ollama / OpenAI / Gemini / 第三方中转
+- **RCS Connector Profile**：地址、鉴权、超时、模拟模式、启用状态
+- **Operation Binding**：请求模板、字段映射、响应映射和成功条件
+- **系统操作日志中心**：按 HUMAN_OP、AUTO_TASK、API_IN、API_OUT 审计与 JSON 详情调试
+- **Skills / Prompts / Tools**：技能、系统提示词和工具注册总览
 
-管理后台包含：
-
-- LLM Provider Profile：Ollama / OpenAI / Gemini / 第三方中转
-- RCS Connector Profile：地址、鉴权、超时、模拟模式、启用状态
-- Operation Binding：请求模板、字段映射、响应映射和成功条件
-- Skills / Prompts / Tools：技能、系统提示词和工具注册总览
-- 全局配置：API、图像生成和系统运行参数
+![系统操作日志中心与审计调试](docs/screenshots/10-system-logs.jpg)
 
 ## 🚀 快速开始
 
@@ -178,20 +188,20 @@ cd frontend && npm run lint && npm run build
 
 ## 🤖 模型能力分级
 
-同一个 Prompt 用 2B 本地模型和商业模型得到几乎相同的结果，通常不是模型能力相同，而是系统把它们限制在了同一套模板里。SIDEA 会根据 Active Profile 自动选择生成路径：
+同一个 Prompt 用 2B 本地模型和商业模型得到几乎相同的结果，通常不是模型能力相同，而是系统把它们限制在了同一套模板里。SIDEA 会根据 Active Profile **与用户意图** 选择生成路径：
 
 ```text
-Local small model
-    └─ Template tier → 固定面板协议 → 稳定 ECharts
-
-OpenAI / Gemini / compatible / large local model
-    └─ Freeform tier → 完整 ECharts JSON → 校验与修复 → 模板回退
+detect_dashboard_tier(profile, message)
+    ├─ template → 模拟/真数 → Dashboard DSL v2（固定 widget）
+    ├─ freeform → LLM 编排 DSL layout+data → 校验 → 模板回退
+    └─ scene    → 拆任务 → 场景 JSON → Three.js 脚手架 → 审核 → iframe
 ```
 
-- **Template tier**：适合小模型，结果稳定、结构可控
-- **Freeform tier**：适合强模型，可生成英雄面板、3D、动画和更自由的布局
-- 可在 LLM Profile 中手动覆盖 `dashboard_tier`
-- 空数据或不可渲染面板会被拒绝；AMR 主题缺少地图时会自动注入仿真地图兜底
+- **Template**：小模型稳定档，视觉上限由前端组件库决定
+- **Freeform**：商业模型编排 DSL（可含 `custom_echarts`）
+- **Scene**：商业模型 + 3D/数字孪生意向时，沙箱构建 HTML+Three.js，iframe 交付
+- 可在 LLM Profile 中手动覆盖 `dashboard_tier`（`template` / `freeform` / `scene`）
+- 详见 [docs/dashboard-dsl-v2.md](docs/dashboard-dsl-v2.md)
 
 ## 🔌 可配置 RCS 适配层
 
@@ -271,10 +281,12 @@ Goal Orchestrator
 ## 🧰 内置能力
 
 - **Agent**：ReAct、流式响应、Tool Calling、HITL 权限模式
-- **数据**：Python 沙箱、Excel / PDF / Word 读取、图表导出
-- **RAG**：ChromaDB + Sentence Transformers，可选本地知识增强
+- **Graph RAG**：ChromaDB + Sentence Transformers + 实体拓扑链（点击子图高亮动画、0.3x~2.0x 缩放控制、节点斥力调节）
+- **数据与向量**：384-D BGE Vector Embedding 样本明细、余弦相似度语义匹配、Python 沙箱、Excel/PDF/Word 读取
+- **经验与规则**：工控故障经验自动提炼、人工审核入库、AI Prompt 规则自动审核流水线
+- **日志与审计**：全量操作日志中心 (HUMAN_OP / AUTO_TASK / API_IN / API_OUT) 与 JSON 原始数据调试
+- **全局 UI 与分页**：深浅色高对比度主题自适应、标准 Ant Design 表格分页器 (SizeChanger & QuickJumper)
 - **工业工具**：PLC 读取、任务统计、告警、AGV 状态、地图快照
-- **图像**：云端生成、备用服务、离线程序化封面
 - **国际化**：简体中文、繁体中文、English、日本語
 - **导出**：Dashboard JSON、图片、PDF、Prompt 与数据
 
@@ -283,7 +295,7 @@ Goal Orchestrator
 ```text
 SIDEA-Agent/
 ├── agent/                    # LangGraph 与 Goal Pipeline
-├── api/routes/               # Chat、History、Admin、RCS、LLM API
+├── api/routes/               # Chat、History、Admin、RCS、LLM、Knowledge API
 ├── core/                     # LLM Factory、Public URL
 ├── integrations/
 │   ├── llm/                  # Provider Profile、模型目录、能力分级
@@ -305,12 +317,15 @@ SIDEA-Agent/
 - [x] 可配置 RCS Connector / Operation Binding
 - [x] 强弱模型分级的大屏生成流水线
 - [x] AMR 地图、动态路径与 ECharts GL
+- [x] Agentic Graph RAG 实体关系链、点击高亮动画与矢量切片明细
+- [x] 系统操作日志中心与审计 (HUMAN_OP / AUTO_TASK / API)
+- [x] 全局深浅色高对比度 UI 与标准表格分页
 - [x] 会话文件夹与历史管理
 - [x] Docker Compose 一键部署
 - [x] 可复现离线 AMR Demo + CI smoke tests
 - [ ] RCS Connector 模板市场
 - [ ] Three.js / glTF 真正 3D 厂区数字孪生
-- [ ] RBAC、审计日志与 Secret Manager
+- [ ] Secret Manager 密钥托管
 - [ ] 更完整的端到端浏览器测试
 
 ## 🤝 参与贡献

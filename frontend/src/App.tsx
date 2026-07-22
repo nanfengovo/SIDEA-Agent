@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ChatPanel from './components/ChatPanel';
 import TracePanel from './components/TracePanel';
-import { Activity, Sun, Moon, Cpu, Database, Languages, Settings, BookOpen, Check } from 'lucide-react';
+import { Activity, Sun, Moon, Cpu, Database, Languages, Settings, BookOpen, Check, Zap, ZapOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore, toI18nLng } from './store';
 import type { AppLanguage } from './store';
-import { ConfigProvider, theme as antdTheme, Select, Tooltip } from 'antd';
+import { ConfigProvider, theme as antdTheme, Select, Tooltip, App as AntdApp } from 'antd';
 import AdminLayout from './pages/admin/AdminLayout';
 import KnowledgePanel from './components/KnowledgePanel';
 import HistorySidebar from './components/history/HistorySidebar';
+import SystemLogsPanel from './components/SystemLogsPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { TraceEvent } from './types';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,14 +20,15 @@ import { getApiUrl } from './config';
 
 function App() {
   const { t, i18n } = useTranslation();
-  const { theme, language, toggleTheme, setLanguage } = useAppStore();
+  const { theme, language, enableAnimations, toggleTheme, setLanguage, toggleAnimations } = useAppStore();
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   
   // Resizable panels state
   const [leftWidth, setLeftWidth] = useState(70); // percentage
   const [isDragging, setIsDragging] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'admin' | 'knowledge'>('chat');
+  const [viewMode, setViewMode] = useState<'chat' | 'admin' | 'knowledge' | 'system_logs'>('chat');
+  const [systemLogRuleId, setSystemLogRuleId] = useState<string | null>(null);
   
   // Skill & Model state
   const [skills, setSkills] = useState<{skill_id: string, skill_name: string}[]>([]);
@@ -158,7 +160,8 @@ function App() {
         token: { colorPrimary: '#00f2fe' }
       }}
     >
-      <div className="flex flex-col h-screen w-full box-border text-[var(--text-primary)] font-sans transition-colors duration-300 relative overflow-hidden bg-[url('/grid.svg')] bg-repeat pl-12">
+      <AntdApp>
+        <div className="flex flex-col h-screen w-full box-border text-[var(--text-primary)] font-sans transition-colors duration-300 relative overflow-hidden bg-[url('/grid.svg')] bg-repeat pl-12">
         <HistorySidebar 
           currentSessionId={currentSessionId}
           onSelectSession={(id) => setCurrentSessionId(id)}
@@ -278,6 +281,17 @@ function App() {
                 </div>
               )}
             </div>
+            <Tooltip title={enableAnimations ? "关闭大屏动画特效" : "开启大屏动画特效"} placement="bottom">
+              <button onClick={toggleAnimations} className={`p-2 rounded-full transition-colors ${enableAnimations ? 'hover:bg-emerald-500/20' : 'hover:bg-gray-500/20'}`}>
+                <AnimatePresence mode="wait">
+                  {enableAnimations ? (
+                    <motion.div key="on" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}><Zap size={18} className="text-emerald-400" /></motion.div>
+                  ) : (
+                    <motion.div key="off" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}><ZapOff size={18} className="text-gray-400" /></motion.div>
+                  )}
+                </AnimatePresence>
+              </button>
+            </Tooltip>
             <Tooltip title="Toggle Theme" placement="bottom">
               <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--accent-cyan)]/20 transition-colors">
                 <AnimatePresence mode="wait">
@@ -292,6 +306,11 @@ function App() {
             <Tooltip title="知识库管理" placement="bottom">
               <button onClick={() => setViewMode('knowledge')} className="p-2 rounded-full hover:bg-[var(--accent-blue)]/20 transition-colors">
                 <BookOpen size={18} className="text-[var(--accent-blue)]" />
+              </button>
+            </Tooltip>
+            <Tooltip title="系统日志追踪" placement="bottom">
+              <button onClick={() => setViewMode('system_logs')} className="p-2 rounded-full hover:bg-emerald-500/20 transition-colors">
+                <Activity size={18} className="text-emerald-400" />
               </button>
             </Tooltip>
             <Tooltip title="Admin Dashboard" placement="bottom">
@@ -353,10 +372,22 @@ function App() {
         </div>
         ) : viewMode === 'admin' ? (
           <AdminLayout onExit={() => setViewMode('chat')} />
+        ) : viewMode === 'knowledge' ? (
+          <KnowledgePanel 
+            onExit={() => setViewMode('chat')} 
+            onOpenLogs={(ruleId) => {
+              setSystemLogRuleId(ruleId || null);
+              setViewMode('system_logs');
+            }} 
+          />
         ) : (
-          <KnowledgePanel onExit={() => setViewMode('chat')} />
+          <SystemLogsPanel 
+            onExit={() => setViewMode('chat')} 
+            initialRuleId={systemLogRuleId}
+          />
         )}
       </div>
+      </AntdApp>
     </ConfigProvider>
   );
 }

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIDEA Scene</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --panel: rgba(10, 18, 32, 0.82);
+      --cyan: #22d3ee;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: rgba(34, 211, 238, 0.28);
+    }
+    :root.light {
+      --bg: #f8fafc;
+      --panel: rgba(255, 255, 255, 0.85);
+      --cyan: #0ea5e9;
+      --text: #334155;
+      --muted: #64748b;
+      --border: rgba(14,165,233,0.3);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: "Segoe UI", "PingFang SC", sans-serif; color: var(--text); }
+    #stage { position: absolute; inset: 0; }
+    canvas { display: block; }
+    .hud {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(34,211,238,0.12), transparent 60%),
+        linear-gradient(180deg, rgba(7,11,22,0.35), transparent 18%, transparent 82%, rgba(7,11,22,0.55));
+    }
+    :root.light .hud {
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(14,165,233,0.05), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,0.2), transparent 18%, transparent 82%, rgba(255,255,255,0.4));
+    }
+    .top {
+      position: absolute; top: 16px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    }
+    .title-card, .kpi, .side-card {
+      pointer-events: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 0 1px rgba(34,211,238,0.05), 0 12px 40px rgba(0,0,0,0.35);
+    }
+    :root.light .title-card, :root.light .kpi, :root.light .side-card {
+      box-shadow: 0 0 0 1px rgba(14,165,233,0.05), 0 12px 40px rgba(0,0,0,0.1);
+    }
+    .title-card { padding: 12px 16px; border-radius: 14px; min-width: 280px; }
+    .title-card h1 { font-size: 18px; letter-spacing: 0.04em; color: var(--cyan); }
+    .title-card p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+    .kpis { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .kpi { min-width: 110px; padding: 10px 12px; border-radius: 12px; }
+    .kpi .label { font-size: 11px; color: var(--muted); }
+    .kpi .value { margin-top: 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .kpi .delta { margin-top: 2px; font-size: 11px; color: var(--cyan); font-family: ui-monospace, monospace; }
+    .side {
+      position: absolute; right: 16px; top: 96px; width: 240px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .side-card { padding: 12px; border-radius: 12px; }
+    .side-card h3 { font-size: 12px; color: var(--cyan); margin-bottom: 8px; letter-spacing: 0.06em; }
+    .side-card li { list-style: none; font-size: 12px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid rgba(148,163,184,0.12); }
+    .side-card li:last-child { border-bottom: none; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #34d399;
+      font-family: ui-monospace, monospace;
+    }
+    .badge i { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .hint {
+      position: absolute; left: 16px; bottom: 16px; font-size: 11px; color: var(--muted);
+      background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px;
+    }
+  </style>
+  <script>
+    if (new URLSearchParams(window.location.search).get('theme') === 'light') {
+      document.documentElement.classList.add('light');
+    }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="hud">
+    <div class="top">
+      <div class="title-card">
+        <div class="badge"><i></i><span id="status">LIVE SCENE</span></div>
+        <h1 id="title">智慧工厂数字孪生</h1>
+        <p id="subtitle">AMR · Racks · Paths · Industrial Lighting</p>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+    <div class="side">
+      <div class="side-card">
+        <h3>FLEET</h3>
+        <ul id="fleet"></ul>
+      </div>
+      <div class="side-card">
+        <h3>INSIGHTS</h3>
+        <ul id="insights"></ul>
+      </div>
+    </div>
+    <div class="hint">拖拽旋转 · 滚轮缩放 · 自动巡航</div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const SCENE = window.__SIDEA_SCENE__ || {
+      title: '智慧工厂数字孪生',
+      subtitle: 'AMR warehouse digital twin',
+      status: 'SIMULATED',
+      kpis: [
+        { label: '今日任务', value: '1286', delta: '+12%' },
+        { label: '稼动率', value: '82%', delta: '+3.1%' },
+        { label: '在线车', value: '27', delta: '1 fault' },
+        { label: '自动化率', value: '86%', delta: '+1.8%' }
+      ],
+      racks: [
+        { x: -18, z: -10, w: 4, h: 8, d: 16, color: '#1d4ed8' },
+        { x: -10, z: -10, w: 4, h: 8, d: 16, color: '#1e40af' },
+        { x: 10, z: -10, w: 4, h: 8, d: 16, color: '#1d4ed8' },
+        { x: 18, z: -10, w: 4, h: 8, d: 16, color: '#1e3a8a' },
+        { x: -18, z: 12, w: 4, h: 7, d: 14, color: '#0e7490' },
+        { x: -10, z: 12, w: 4, h: 7, d: 14, color: '#155e75' }
+      ],
+      robots: [
+        { id: 'AMR-01', x: -4, z: 0, status: 'busy' },
+        { id: 'AMR-02', x: 2, z: 3, status: 'busy' },
+        { id: 'AMR-03', x: 6, z: -2, status: 'idle' },
+        { id: 'AMR-04', x: -1, z: 6, status: 'fault' },
+        { id: 'AMR-05', x: 12, z: 8, status: 'charging' }
+      ],
+      paths: [
+        [[-4, 0], [0, 2], [6, -2], [12, 8]],
+        [[2, 3], [4, 1], [8, 4]]
+      ],
+      insights: [
+        'AMR-04 故障，建议就近改派',
+        '右翼货架区负载偏高',
+        '主通道通行正常'
+      ],
+      palette: { floor: '#111827', accent: '#22d3ee', amr: '#f59e0b' }
+    };
+
+    document.getElementById('title').textContent = SCENE.title || 'SIDEA Scene';
+    document.getElementById('subtitle').textContent = SCENE.subtitle || '';
+    document.getElementById('status').textContent = (SCENE.status || 'LIVE').toUpperCase();
+    document.getElementById('kpis').innerHTML = (SCENE.kpis || []).map(k => `
+      <div class="kpi">
+        <div class="label">${k.label || ''}</div>
+        <div class="value">${k.value ?? ''}</div>
+        <div class="delta">${k.delta || ''}</div>
+      </div>`).join('');
+    document.getElementById('fleet').innerHTML = (SCENE.robots || []).map(r =>
+      `<li><b style="color:#e2e8f0">${r.id}</b> · ${r.status}</li>`
+    ).join('');
+    document.getElementById('insights').innerHTML = (SCENE.insights || []).map(t => `<li>${t}</li>`).join('');
+
+    const root = document.getElementById('stage');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    root.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070b16, 0.018);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(28, 22, 28);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 2, 0);
+    controls.maxPolarAngle = Math.PI * 0.48;
+
+    const hemi = new THREE.HemisphereLight(0x9ecbff, 0x0b1220, 0.85);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, 1.15);
+    key.position.set(20, 30, 12);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 100;
+    key.shadow.camera.left = -30;
+    key.shadow.camera.right = 30;
+    key.shadow.camera.top = 30;
+    key.shadow.camera.bottom = -30;
+    scene.add(key);
+    const cyan = new THREE.PointLight(0x22d3ee, 1.4, 60);
+    cyan.position.set(-8, 10, 8);
+    scene.add(cyan);
+
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(SCENE.palette?.floor || '#111827'),
+      metalness: 0.35,
+      roughness: 0.55
+    });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // lane markings
+    const laneMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+    for (let i = -3; i <= 3; i++) {
+      const lane = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 40), laneMat);
+      lane.rotation.x = -Math.PI / 2;
+      lane.position.set(i * 5, 0.02, 2);
+      scene.add(lane);
+    }
+
+    const grid = new THREE.GridHelper(70, 35, 0x164e63, 0x0f172a);
+    grid.position.y = 0.01;
+    scene.add(grid);
+
+    if (SCENE.model3d_url) {
+      const loader = new GLTFLoader();
+      loader.load(SCENE.model3d_url, (gltf) => {
+        const model = gltf.scene;
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 25 / maxDim;
+        model.scale.set(scale, scale, scale);
+        
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.x = -center.x * scale;
+        model.position.z = -center.z * scale;
+        model.position.y = -box.min.y * scale;
+        
+        scene.add(model);
+      });
+    }
+
+    if (!SCENE.model3d_url) {
+
+
+    (SCENE.racks || []).forEach(r => {
+      const geo = new THREE.BoxGeometry(r.w || 4, r.h || 8, r.d || 12);
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(r.color || '#1d4ed8'),
+        metalness: 0.45,
+        roughness: 0.35,
+        emissive: new THREE.Color(r.color || '#1d4ed8'),
+        emissiveIntensity: 0.08
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(r.x || 0, (r.h || 8) / 2, r.z || 0);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      // shelf lines
+      for (let y = 1.5; y < (r.h || 8); y += 1.6) {
+        const shelf = new THREE.Mesh(
+          new THREE.BoxGeometry((r.w || 4) * 0.92, 0.08, (r.d || 12) * 0.92),
+          new THREE.MeshStandardMaterial({ color: 0x93c5fd, metalness: 0.6, roughness: 0.25 })
+        );
+        shelf.position.set(r.x || 0, y, r.z || 0);
+        scene.add(shelf);
+      }
+    });
+
+    const statusColor = { busy: 0x34d399, idle: 0x3b82f6, charging: 0xfbbf24, fault: 0xef4444 };
+    const robots = [];
+    (SCENE.robots || []).forEach(r => {
+      const body = new THREE.Group();
+      const chassis = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.7, 1.4),
+        new THREE.MeshStandardMaterial({ color: new THREE.Color(SCENE.palette?.amr || '#f59e0b'), metalness: 0.5, roughness: 0.35 })
+      );
+      chassis.castShadow = true;
+      chassis.position.y = 0.45;
+      body.add(chassis);
+      const mast = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 1.8, 0.25),
+        new THREE.MeshStandardMaterial({ color: 0x111827 })
+      );
+      mast.position.set(-0.7, 1.2, 0);
+      body.add(mast);
+      const lamp = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 16, 16),
+        new THREE.MeshStandardMaterial({
+          color: statusColor[r.status] || 0x22d3ee,
+          emissive: statusColor[r.status] || 0x22d3ee,
+          emissiveIntensity: 0.9
+        })
+      );
+      lamp.position.set(0.8, 0.9, 0);
+      body.add(lamp);
+      body.position.set(r.x || 0, 0, r.z || 0);
+      scene.add(body);
+      robots.push({ mesh: body, base: { x: r.x || 0, z: r.z || 0 }, phase: Math.random() * Math.PI * 2, status: r.status });
+    });
+    } // end if (!SCENE.model3d_url)
+
+    const pathMat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.55 });
+    (SCENE.paths || []).forEach(path => {
+      const pts = path.map(p => new THREE.Vector3(p[0], 0.2, p[1]));
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      scene.add(new THREE.Line(geo, pathMat));
+    });
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onResize);
+
+    let t = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      t += 0.01;
+      robots.forEach((r, i) => {
+        if (r.status === 'fault') return;
+        r.mesh.position.x = r.base.x + Math.sin(t + r.phase) * (r.status === 'busy' ? 1.6 : 0.4);
+        r.mesh.position.z = r.base.z + Math.cos(t * 0.8 + r.phase) * (r.status === 'busy' ? 1.2 : 0.3);
+        r.mesh.rotation.y = Math.sin(t + i) * 0.2;
+      });
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

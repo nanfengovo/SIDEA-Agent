@@ -9,11 +9,22 @@ from typing import List, Optional
 from infra.logging.structured_logger import get_structured_logger
 from infra.database import get_connection
 
-# ChromaDB & Langchain
-import chromadb
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# ChromaDB & Langchain（可选：缺依赖时后端仍可启动，知识库接口返回 503）
+try:
+    import chromadb
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_core.documents import Document
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    _KB_AVAILABLE = True
+    _KB_IMPORT_ERROR = ""
+except Exception as e:  # pragma: no cover
+    chromadb = None  # type: ignore
+    HuggingFaceEmbeddings = None  # type: ignore
+    Document = None  # type: ignore
+    RecursiveCharacterTextSplitter = None  # type: ignore
+    _KB_AVAILABLE = False
+    _KB_IMPORT_ERROR = str(e)
 
 logger = get_structured_logger("api.routes.knowledge")
 router = APIRouter()
@@ -23,7 +34,17 @@ chroma_client = None
 collection = None
 embeddings = None
 
+
+def _require_kb():
+    if not _KB_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail=f"知识库不可用：缺少依赖（chromadb / langchain）。请执行 pip install -r requirements.txt。原因: {_KB_IMPORT_ERROR}",
+        )
+
+
 def init_chroma():
+    _require_kb()
     global chroma_client, collection, embeddings
     db_path = str(Path(__file__).parent.parent.parent / "database" / "chroma_db")
     os.makedirs(db_path, exist_ok=True)
@@ -189,7 +210,8 @@ async def extract_experience(req: ExtractRequest, background_tasks: BackgroundTa
             hum_msg = HumanMessage(content=content)
             
             res = llm.invoke([sys_msg, hum_msg])
-            rule = res.content
+            raw_rule = getattr(res, "content", "")
+            rule = raw_rule if isinstance(raw_rule, str) else " ".join([c.get("text", "") for c in raw_rule if isinstance(c, dict) and "text" in c])
             
             with get_connection("config.db") as conn:
                 conn.execute("UPDATE kb_experience_queue SET extracted_rule = ? WHERE id = ?", (rule, exp_id))
@@ -244,3 +266,176 @@ def approve_experience(exp_id: str, req: ApproveExperienceRequest):
     )
     
     return {"status": "success"}
+
+class SearchKBRequest(BaseModel):
+    query: str
+    limit: Optional[int] = 5
+
+@router.get("/knowledge/chunks")
+def get_knowledge_chunks():
+    """Get all text chunks and vector embedding previews from ChromaDB."""
+    try:
+        init_chroma()
+        if collection is None:
+            return []
+        data = collection.get(include=["documents", "metadatas", "embeddings"])
+        ids = data.get("ids") or []
+        documents = data.get("documents") or []
+        metadatas = data.get("metadatas") or []
+        raw_embeddings = data.get("embeddings")
+
+        results = []
+        for idx, chunk_id in enumerate(ids):
+            text = documents[idx] if idx < len(documents) else ""
+            meta = metadatas[idx] if idx < len(metadatas) else {}
+            emb = raw_embeddings[idx] if raw_embeddings is not None and idx < len(raw_embeddings) else []
+            emb_list = list(emb) if hasattr(emb, "__iter__") else []
+            
+            results.append({
+                "id": chunk_id,
+                "doc_id": meta.get("doc_id", "unknown"),
+                "filename": meta.get("filename", meta.get("type", "knowledge_item")),
+                "text": text,
+                "embedding_dim": len(emb_list),
+                "embedding_preview": [round(float(x), 4) for x in emb_list[:8]],
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Failed to fetch knowledge chunks: {e}")
+        return []
+
+@router.post("/knowledge/search")
+def search_knowledge_chunks(req: SearchKBRequest):
+    """Semantic vector search against ChromaDB."""
+    if not req.query.strip():
+        return []
+    try:
+        init_chroma()
+        if collection is None or embeddings is None:
+            return []
+        query_emb = embeddings.embed_query(req.query)
+        res = collection.query(
+            query_embeddings=[query_emb],
+            n_results=req.limit or 5,
+            include=["documents", "metadatas", "distances"]
+        )
+        ids = res.get("ids", [[]])[0]
+        docs = res.get("documents", [[]])[0]
+        metas = res.get("metadatas", [[]])[0]
+        dists = res.get("distances", [[]])[0]
+
+        items = []
+        for i in range(len(ids)):
+            dist = dists[i] if i < len(dists) else 0.0
+            similarity = max(0.0, round((1.0 - float(dist)) * 100, 1))
+            items.append({
+                "id": ids[i],
+                "doc_id": metas[i].get("doc_id", "unknown") if i < len(metas) else "",
+                "filename": metas[i].get("filename", metas[i].get("type", "chunk")) if i < len(metas) else "chunk",
+                "text": docs[i] if i < len(docs) else "",
+                "similarity": similarity,
+                "distance": round(float(dist), 4),
+            })
+        return items
+    except Exception as e:
+        logger.error(f"Vector search failed: {e}")
+        return []
+
+@router.get("/knowledge/graph")
+def get_knowledge_graph():
+    """Extract entity-relationship graph (Graph RAG) from KB documents and experiences."""
+    try:
+        init_chroma()
+    except Exception as e:
+        logger.warning(f"init_chroma deferred in get_knowledge_graph: {e}")
+
+    nodes = []
+    links = []
+    node_set = set()
+
+    def clean_text(t: str, max_len: int = 14) -> str:
+        if not t:
+            return ""
+        s = t.replace("#", "").replace("*", "").replace("\n", " ").strip()
+        return s[:max_len] + "..." if len(s) > max_len else s
+
+    def add_node(node_id: str, label: str, category: str, val: int = 10):
+        if node_id not in node_set:
+            node_set.add(node_id)
+            nodes.append({
+                "id": node_id,
+                "name": clean_text(label, 16),
+                "category": category,
+                "symbolSize": min(42, max(18, val * 4)),
+                "value": val
+            })
+
+    def add_link(source: str, target: str, relation: str):
+        if source in node_set and target in node_set:
+            links.append({
+                "source": source,
+                "target": target,
+                "relation": relation,
+                "label": {"show": True, "formatter": relation, "fontSize": 10}
+            })
+
+    # Add core Root Node
+    add_node("kb_root", "工业知识拓扑 (Graph RAG)", "System", 10)
+
+    # 1. Fetch DB Documents (top 8)
+    with get_connection("config.db") as conn:
+        docs = conn.execute("SELECT doc_id, filename, chunk_count FROM kb_documents WHERE status = 'completed' ORDER BY created_at DESC LIMIT 8").fetchall()
+        for d in docs:
+            doc_node_id = f"doc_{d['doc_id']}"
+            add_node(doc_node_id, d['filename'], "Document", d['chunk_count'] or 3)
+            add_link("kb_root", doc_node_id, "包含文档")
+
+    # 2. Fetch Experience Rules (top 12)
+    with get_connection("config.db") as conn:
+        exps = conn.execute("SELECT id, content, extracted_rule, status FROM kb_experience_queue WHERE status IN ('approved', 'auto_approved') ORDER BY created_at DESC LIMIT 12").fetchall()
+        for exp in exps:
+            exp_id = f"exp_{exp['id']}"
+            rule_text = exp['extracted_rule'] or ""
+            add_node(exp_id, f"经验: {clean_text(rule_text, 12)}", "Experience", 4)
+            add_link("kb_root", exp_id, "沉淀经验")
+
+            # Extract basic entities (Device, Fault, Solution)
+            txt = rule_text
+            if "AMR" in txt or "AGV" in txt:
+                add_node("ent_amr", "AMR 调度卡口", "Device", 6)
+                add_link(exp_id, "ent_amr", "关联设备")
+            if "通讯" in txt or "超时" in txt or "E04" in txt:
+                add_node("ent_e04", "E04 通讯异常", "Fault", 6)
+                add_link(exp_id, "ent_e04", "故障现象")
+                add_node("ent_sol_wifi", "重置 5G AP 节点", "Solution", 6)
+                add_link("ent_e04", "ent_sol_wifi", "解决方案")
+            if "晶圆" in txt or "FOUP" in txt:
+                add_node("ent_wafer", "FOUP 晶圆搬运规范", "Concept", 5)
+                add_link(exp_id, "ent_wafer", "业务规则")
+
+    # 3. Add default domain nodes if sparse
+    if len(nodes) <= 1:
+        add_node("ent_amr", "AMR 物料搬运机器人", "Device", 8)
+        add_node("ent_wafer", "半导体晶圆洁净车间规范", "Concept", 8)
+        add_node("ent_plc", "PLC 梯形图故障诊断协议", "Protocol", 7)
+        add_link("kb_root", "ent_amr", "设备知识")
+        add_link("kb_root", "ent_wafer", "场景规范")
+        add_link("kb_root", "ent_plc", "工控协议")
+
+    categories = [
+        {"name": "System"},
+        {"name": "Document"},
+        {"name": "Experience"},
+        {"name": "Device"},
+        {"name": "Fault"},
+        {"name": "Solution"},
+        {"name": "Concept"},
+        {"name": "Protocol"}
+    ]
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "categories": categories
+    }
+

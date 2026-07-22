@@ -3,6 +3,8 @@ if "HTTP_PROXY" in os.environ: del os.environ["HTTP_PROXY"]
 if "HTTPS_PROXY" in os.environ: del os.environ["HTTPS_PROXY"]
 if "http_proxy" in os.environ: del os.environ["http_proxy"]
 if "https_proxy" in os.environ: del os.environ["https_proxy"]
+if "NO_PROXY" in os.environ: del os.environ["NO_PROXY"]
+if "no_proxy" in os.environ: del os.environ["no_proxy"]
 
 import urllib.request
 urllib.request.getproxies = lambda: {}
@@ -45,6 +47,8 @@ if __name__ == "__main__":
                 "sandbox_workspace/*",
                 "sandbox_workspace/**",
                 "*.log",
+                "*.db",
+                "*.db-journal",
                 "**/__pycache__/**",
                 "database/*",
                 "frontend/**",

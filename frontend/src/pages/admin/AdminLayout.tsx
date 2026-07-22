@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Settings, Cpu, Wrench, ArrowLeft, Cable, Brain } from 'lucide-react';
+import { Settings, Cpu, Wrench, ArrowLeft, Cable, Brain, LayoutDashboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ConfigManager from './ConfigManager';
 import SkillsManager from './SkillsManager';
 import ToolsViewer from './ToolsViewer';
 import RcsConnectorManager from './RcsConnectorManager';
 import LlmProviderManager from './LlmProviderManager';
+import TemplateManager from './TemplateManager';
+import ModelManager from './ModelManager';
 
 interface AdminLayoutProps {
   onExit: () => void;
@@ -21,6 +23,8 @@ export default function AdminLayout({ onExit }: AdminLayoutProps) {
     { key: 'rcs', icon: <Cable size={18} />, label: t('nav_rcs') || 'RCS 连接器', accent: 'blue' },
     { key: 'skills', icon: <Cpu size={18} />, label: t('nav_skills'), accent: 'purple' },
     { key: 'tools', icon: <Wrench size={18} />, label: t('nav_tools'), accent: 'blue' },
+    { key: 'templates', icon: <LayoutDashboard size={18} />, label: t('nav_templates') || '大屏模板', accent: 'cyan' },
+    { key: 'models', icon: <Cpu size={18} />, label: '3D 资产库', accent: 'purple' },
   ] as const;
 
   const accentClass: Record<string, string> = {
@@ -75,6 +79,8 @@ export default function AdminLayout({ onExit }: AdminLayoutProps) {
           {activeTab === 'rcs' && <RcsConnectorManager />}
           {activeTab === 'skills' && <SkillsManager />}
           {activeTab === 'tools' && <ToolsViewer />}
+          {activeTab === 'templates' && <TemplateManager />}
+          {activeTab === 'models' && <ModelManager />}
         </div>
       </div>
     </div>

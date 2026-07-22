@@ -201,15 +201,32 @@ export default function SkillsManager() {
                   <Form.Item name="template_path" label="Template Path (.md)" rules={[{ required: true }]}>
                     <Input placeholder="skills/templates/my_skill.md" />
                   </Form.Item>
-                  <Form.Item name="bound_tools" label="Bound Tools">
-                    <Select mode="multiple" placeholder="Select tools">
-                      {tools.map((tl) => (
-                        <Select.Option key={tl.key} value={tl.key}>
-                          {tl.name} ({tl.key})
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
+                    <Form.Item name="bound_tools" label="Bound Tools">
+                      <Select 
+                        mode="multiple" 
+                        placeholder="Select tools"
+                        optionLabelProp="label"
+                        dropdownMatchSelectWidth={false}
+                        listHeight={400}
+                      >
+                        {tools.map((tl) => (
+                          <Select.Option 
+                            key={tl.key} 
+                            value={tl.key} 
+                            label={`${tl.name} (${tl.key})`}
+                          >
+                            <div className="flex flex-col py-1">
+                              <span className="font-medium">{tl.name} <span className="text-[var(--text-secondary)] text-xs font-normal">({tl.key})</span></span>
+                              {tl.description && (
+                                <span className="text-xs text-[var(--text-secondary)] truncate max-w-lg mt-0.5" title={tl.description}>
+                                  {tl.description}
+                                </span>
+                              )}
+                            </div>
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
 
                   <div className="grid grid-cols-3 gap-4">
                     <Form.Item name="temperature" label="Temperature">

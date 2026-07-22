@@ -1,3 +1,5 @@
+import type { DashboardDslV2 } from '../dashboard/types';
+
 export type DashboardPreviewPanel = {
   id?: string;
   title?: string;
@@ -10,6 +12,9 @@ export type DashboardPreviewPayload = {
   title?: string;
   panels: DashboardPreviewPanel[];
   theme: 'dark' | 'light' | string;
+  /** DSL v2 预览（与 panels 二选一） */
+  dsl?: DashboardDslV2;
+  language?: string;
 };
 
 export function saveDashboardPreview(payload: DashboardPreviewPayload): string {

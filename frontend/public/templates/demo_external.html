@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>External Dashboard Demo</title>
+  <style>
+    body {
+      margin: 0; padding: 0; background-color: #0b1120; color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh;
+      background-image: linear-gradient(45deg, #0f172a 25%, transparent 25%, transparent 75%, #0f172a 75%, #0f172a), 
+                        linear-gradient(45deg, #0f172a 25%, transparent 25%, transparent 75%, #0f172a 75%, #0f172a);
+      background-size: 40px 40px;
+      background-position: 0 0, 20px 20px;
+    }
+    h1 { color: #38bdf8; font-size: 2.5rem; text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+    .card { background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; border-radius: 12px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 80%; max-width: 600px; }
+    .data-row { display: flex; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid #334155; }
+    .data-row:last-child { border-bottom: none; }
+    .label { color: #94a3b8; font-family: monospace; }
+    .value { font-weight: bold; color: #10b981; }
+    #status { margin-top: 1rem; color: #f59e0b; font-size: 0.8rem; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>开源外部大屏 Demo</h1>
+  <div class="card">
+    <div class="data-row"><span class="label">TEMPLATE_NAME</span><span class="value" id="val_name">--</span></div>
+    <div class="data-row"><span class="label">CATEGORY</span><span class="value" id="val_category">--</span></div>
+    <div class="data-row"><span class="label">STYLE</span><span class="value" id="val_style">--</span></div>
+    <div class="data-row"><span class="label">SCENARIO</span><span class="value" id="val_scenario">--</span></div>
+    <div id="status">Waiting for postMessage injection...</div>
+  </div>
+
+  <script>
+    // The Glue Code to receive data from SIDEA Agent
+    window.addEventListener("message", (event) => {
+      // In a real scenario, you'd check origin
+      if (event.data && event.data.type === "SIDEA_INJECT") {
+        const payload = event.data.payload;
+        document.getElementById('val_name').textContent = payload.name || 'N/A';
+        document.getElementById('val_category').textContent = payload.category || 'N/A';
+        document.getElementById('val_style').textContent = payload.style || 'N/A';
+        document.getElementById('val_scenario').textContent = payload.scenario || 'N/A';
+        document.getElementById('status').textContent = "Data injected successfully via postMessage at " + new Date().toLocaleTimeString();
+        document.getElementById('status').style.color = "#10b981";
+      }
+    });
+  </script>
+</body>
+</html>

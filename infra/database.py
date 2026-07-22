@@ -113,10 +113,41 @@ def init_db(db_path: str = "config.db"):
             session_id    TEXT,
             content       TEXT NOT NULL,
             extracted_rule TEXT NOT NULL,
-            status        TEXT DEFAULT 'pending', -- pending, approved, rejected
+            status        TEXT DEFAULT 'pending', -- pending, approved, rejected, auto_approved, auto_rejected
             created_at    TEXT DEFAULT (datetime('now','localtime'))
         );
         """)
+
+        # 表 8: kb_review_rules
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS kb_review_rules (
+            id            TEXT PRIMARY KEY,
+            rule_name     TEXT NOT NULL,
+            prompt        TEXT NOT NULL,
+            is_active     INTEGER DEFAULT 1,
+            last_executed_at TEXT,
+            created_at    TEXT DEFAULT (datetime('now','localtime')),
+            updated_at    TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+        try:
+            cursor.execute("ALTER TABLE kb_review_rules ADD COLUMN last_executed_at TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+        # 表 9: sys_operation_logs
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sys_operation_logs (
+            id            TEXT PRIMARY KEY,
+            category      TEXT NOT NULL, -- HUMAN_OP, AUTO_TASK, API_IN, API_OUT
+            action        TEXT NOT NULL,
+            description   TEXT,
+            status        TEXT NOT NULL, -- success, failed
+            raw_data_json TEXT,
+            created_at    TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
 
         # RCS 可配置连接器（Profile + Binding）
         cursor.execute("""
@@ -176,8 +207,27 @@ def init_db(db_path: str = "config.db"):
         );
         """)
 
+        # 大屏可视化模板库 (Phase 2)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_templates (
+            template_id    TEXT PRIMARY KEY,
+            name           TEXT NOT NULL,
+            category       TEXT NOT NULL,
+            description    TEXT DEFAULT '',
+            style          TEXT DEFAULT '',
+            scenario       TEXT DEFAULT '',
+            has_3d         INTEGER NOT NULL DEFAULT 0,
+            source         TEXT DEFAULT '',
+            preview_url    TEXT DEFAULT '',
+            layout_config  TEXT NOT NULL DEFAULT '{}',
+            is_enabled     INTEGER NOT NULL DEFAULT 1,
+            created_at     TEXT DEFAULT (datetime('now','localtime')),
+            updated_at     TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+
         conn.commit()
-    print("SQLite database initialized successfully (v3.0)")
+    print("SQLite database initialized successfully (v3.1)")
 
 def seed_default_config(db_path: str = "config.db"):
     """
@@ -281,6 +331,24 @@ def seed_default_skills(db_path: str = "config.db"):
             "bound_tools": '["text_to_sql", "export_excel", "generate_pdf", "generate_markdown", "abp_rest_api"]',
             "temperature": 0.1,
             "sort_order": 5,
+        },
+        {
+            "skill_id": "rcs_efficiency_analyst",
+            "skill_name": "RCS 效率分析师",
+            "description": "现场 RCS 自动化率统计、工位状态查询与指标解读",
+            "template_path": "skills/templates/rcs_efficiency_analyst.md",
+            "bound_tools": '["query_erack_slot_state", "fetch_shift_metrics", "fetch_active_alarms", "generate_line_chart"]',
+            "temperature": 0.2,
+            "sort_order": 6,
+        },
+        {
+            "skill_id": "dashboard_designer",
+            "skill_name": "大屏可视化设计师",
+            "description": "数字孪生大屏模板筛选、预览、数据槽位注入与渲染生成",
+            "template_path": "skills/templates/dashboard_designer.md",
+            "bound_tools": '["list_dashboard_templates", "recommend_dashboard_template", "render_dashboard", "get_dashboard_stats"]',
+            "temperature": 0.3,
+            "sort_order": 7,
         }
     ]
     

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIDEA Scene · Pixi 2.5D</title>
+  <style>
+    :root {
+      --bg: #070b16;
+      --panel: rgba(10, 18, 32, 0.82);
+      --cyan: #22d3ee;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: rgba(34,211,238,0.28);
+    }
+    :root.light {
+      --bg: #f8fafc;
+      --panel: rgba(255, 255, 255, 0.85);
+      --cyan: #0ea5e9;
+      --text: #334155;
+      --muted: #64748b;
+      --border: rgba(14,165,233,0.3);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: "Segoe UI", "PingFang SC", sans-serif; color: var(--text); }
+    #stage { position: absolute; inset: 0; }
+    canvas { display: block; }
+    .hud {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(34,211,238,0.08), transparent 60%),
+        linear-gradient(180deg, rgba(7,11,22,0.1), transparent 18%, transparent 82%, rgba(7,11,22,0.25));
+    }
+    :root.light .hud {
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(14,165,233,0.05), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,0.2), transparent 18%, transparent 82%, rgba(255,255,255,0.4));
+    }
+    .top {
+      position: absolute; top: 16px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    }
+    .title-card, .kpi, .side-card {
+      pointer-events: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 0 1px rgba(34,211,238,0.05), 0 12px 40px rgba(0,0,0,0.35);
+    }
+    :root.light .title-card, :root.light .kpi, :root.light .side-card {
+      box-shadow: 0 0 0 1px rgba(14,165,233,0.05), 0 12px 40px rgba(0,0,0,0.1);
+    }
+    .title-card { padding: 12px 16px; border-radius: 14px; min-width: 280px; }
+    .title-card h1 { font-size: 18px; letter-spacing: 0.04em; color: var(--cyan); }
+    .title-card p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+    .kpis { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .kpi { min-width: 110px; padding: 10px 12px; border-radius: 12px; }
+    .kpi .label { font-size: 11px; color: var(--muted); }
+    .kpi .value { margin-top: 4px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .kpi .delta { margin-top: 2px; font-size: 11px; color: var(--cyan); font-family: ui-monospace, monospace; }
+    .side {
+      position: absolute; right: 16px; top: 96px; width: 240px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .side-card { padding: 12px; border-radius: 12px; }
+    .side-card h3 { font-size: 12px; color: var(--cyan); margin-bottom: 8px; letter-spacing: 0.06em; }
+    .side-card li { list-style: none; font-size: 12px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid rgba(148,163,184,0.12); }
+    .side-card li:last-child { border-bottom: none; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #34d399;
+      font-family: ui-monospace, monospace;
+    }
+    .badge i { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+    .hint {
+      position: absolute; left: 16px; bottom: 16px; font-size: 11px; color: var(--muted);
+      background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px;
+    }
+  </style>
+  <script src="https://unpkg.com/pixi.js@8.8.1/dist/pixi.min.js"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get('theme') === 'light') {
+      document.documentElement.classList.add('light');
+    }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="hud">
+    <div class="top">
+      <div class="title-card">
+        <div class="badge"><i></i><span id="status">2.5D ISO · PIXI</span></div>
+        <h1 id="title">智慧工厂数字孪生</h1>
+        <p id="subtitle">Isometric warehouse · PixiJS</p>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+    <div class="side">
+      <div class="side-card">
+        <h3>FLEET</h3>
+        <ul id="fleet"></ul>
+      </div>
+      <div class="side-card">
+        <h3>INSIGHTS</h3>
+        <ul id="insights"></ul>
+      </div>
+    </div>
+    <div class="hint">拖拽平移 · 滚轮缩放 · 引擎 PixiJS 2.5D</div>
+  </div>
+  <script>
+(async function () {
+  const SCENE = window.__SIDEA_SCENE__ || {
+    title: "RCS AMR 数字孪生",
+    subtitle: "Pixi isometric twin",
+    status: "SIMULATED",
+    kpis: [
+      { label: "今日任务", value: "1286", delta: "+12%" },
+      { label: "稼动率", value: "82%", delta: "+3.1%" },
+      { label: "在线车", value: "27", delta: "1 fault" },
+      { label: "自动化率", value: "86%", delta: "+1.8%" },
+    ],
+    racks: [
+      { x: -18, z: -10, w: 4, h: 8, d: 16, color: "#1d4ed8" },
+      { x: -10, z: -10, w: 4, h: 8, d: 16, color: "#1e40af" },
+      { x: 10, z: -10, w: 4, h: 8, d: 16, color: "#1d4ed8" },
+      { x: 18, z: -10, w: 4, h: 8, d: 16, color: "#1e3a8a" },
+      { x: -18, z: 12, w: 4, h: 7, d: 14, color: "#0e7490" },
+      { x: 10, z: 12, w: 4, h: 7, d: 14, color: "#0e7490" },
+    ],
+    robots: [
+      { id: "AMR-01", x: -4, z: 0, status: "busy" },
+      { id: "AMR-02", x: 2, z: 3, status: "busy" },
+      { id: "AMR-03", x: 6, z: -2, status: "idle" },
+      { id: "AMR-04", x: -1, z: 6, status: "fault" },
+      { id: "AMR-05", x: 12, z: 8, status: "charging" },
+    ],
+    paths: [[[-4, 0], [0, 2], [6, -2]], [[2, 3], [8, 4]]],
+    insights: ["AMR-04 故障，优先改派", "右翼货架负载偏高", "Pixi 2.5D 场景演示"],
+  };
+
+  document.getElementById("title").textContent = SCENE.title || "SIDEA Scene";
+  document.getElementById("subtitle").textContent = SCENE.subtitle || "";
+  document.getElementById("status").textContent = (SCENE.status || "SIMULATED") + " · PIXI";
+  document.getElementById("kpis").innerHTML = (SCENE.kpis || []).map(k =>
+    `<div class="kpi"><div class="label">${k.label}</div><div class="value">${k.value}</div><div class="delta">${k.delta || ""}</div></div>`
+  ).join("");
+  document.getElementById("fleet").innerHTML = (SCENE.robots || []).map(r =>
+    `<li>${r.id} · ${r.status}</li>`
+  ).join("");
+  document.getElementById("insights").innerHTML = (SCENE.insights || []).map(t =>
+    `<li>${t}</li>`
+  ).join("");
+
+  const STATUS = { busy: 0x34d399, idle: 0x3b82f6, charging: 0xfbbf24, fault: 0xef4444 };
+  const PIXI = window.PIXI;
+  const app = new PIXI.Application();
+  await app.init({
+    resizeTo: document.getElementById("stage"),
+    background: 0x070b16,
+    antialias: true,
+    resolution: Math.min(devicePixelRatio || 1, 2),
+    autoDensity: true,
+  });
+  document.getElementById("stage").appendChild(app.canvas);
+
+  const world = new PIXI.Container();
+  world.sortableChildren = true;
+  app.stage.addChild(world);
+
+  function toIso(x, z) {
+    const s = 14;
+    return { x: (x - z) * s * 0.55, y: (x + z) * s * 0.28 };
+  }
+  function hex(c) {
+    if (typeof c === "number") return c;
+    return parseInt(String(c).replace("#", ""), 16) || 0x1d4ed8;
+  }
+  function shade(color, f) {
+    const r = Math.min(255, ((color >> 16) & 255) * f | 0);
+    const g = Math.min(255, ((color >> 8) & 255) * f | 0);
+    const b = Math.min(255, (color & 255) * f | 0);
+    return (r << 16) | (g << 8) | b;
+  }
+  function drawBox(g, cx, cy, w, d, h, color) {
+    const hw = w / 2, hd = d / 2;
+    const top = [cx, cy - h, cx + hw, cy - h + hd * 0.5, cx, cy - h + hd, cx - hw, cy - h + hd * 0.5];
+    const left = [cx - hw, cy - h + hd * 0.5, cx, cy - h + hd, cx, cy + hd, cx - hw, cy + hd * 0.5];
+    const right = [cx + hw, cy - h + hd * 0.5, cx, cy - h + hd, cx, cy + hd, cx + hw, cy + hd * 0.5];
+    g.poly(left); g.fill({ color: shade(color, 0.55), alpha: 0.92 });
+    g.poly(right); g.fill({ color: shade(color, 0.7), alpha: 0.92 });
+    g.poly(top); g.fill({ color, alpha: 0.95 });
+    g.poly(top); g.stroke({ width: 1, color: 0x67e8f9, alpha: 0.3 });
+  }
+
+  // floor plate
+  const floor = new PIXI.Graphics();
+  const plate = toIso(0, 0);
+  floor.poly([0, -120, 220, 0, 0, 120, -220, 0]);
+  floor.fill({ color: 0x0f172a, alpha: 0.95 });
+  floor.stroke({ width: 1.5, color: 0x22d3ee, alpha: 0.4 });
+  for (let i = -8; i <= 8; i++) {
+    const a = toIso(i * 2, -16);
+    const b = toIso(i * 2, 16);
+    floor.moveTo(a.x, a.y); floor.lineTo(b.x, b.y);
+    floor.stroke({ width: 0.5, color: 0x1e293b, alpha: 0.9 });
+    const c = toIso(-16, i * 2);
+    const d = toIso(16, i * 2);
+    floor.moveTo(c.x, c.y); floor.lineTo(d.x, d.y);
+    floor.stroke({ width: 0.5, color: 0x1e293b, alpha: 0.9 });
+  }
+  floor.zIndex = -1000;
+  world.addChild(floor);
+
+  (SCENE.racks || []).forEach((r) => {
+    const p = toIso(r.x || 0, r.z || 0);
+    const g = new PIXI.Graphics();
+    drawBox(g, p.x, p.y, (r.w || 4) * 8, (r.d || 8) * 3.5, (r.h || 6) * 3.2, hex(r.color));
+    g.zIndex = (r.x || 0) + (r.z || 0);
+    world.addChild(g);
+  });
+
+  const routeG = new PIXI.Graphics();
+  (SCENE.paths || []).forEach((path) => {
+    if (!path || path.length < 2) return;
+    const pts = path.map((pt) => toIso(pt[0], pt[1]));
+    routeG.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) routeG.lineTo(pts[i].x, pts[i].y);
+    routeG.stroke({ width: 2, color: 0x22d3ee, alpha: 0.35 });
+  });
+  routeG.zIndex = -10;
+  world.addChild(routeG);
+
+  const dots = [];
+  (SCENE.paths || []).forEach((path, ri) => {
+    if (!path || path.length < 2) return;
+    const pts = path.map((pt) => toIso(pt[0], pt[1]));
+    const g = new PIXI.Graphics();
+    g.circle(0, 0, 3.5); g.fill({ color: 0x67e8f9 });
+    world.addChild(g);
+    dots.push({ g, pts, t: ri * 0.25, speed: 0.005 });
+  });
+
+  const robots = (SCENE.robots || []).map((r) => {
+    const p = toIso(r.x || 0, r.z || 0);
+    const color = STATUS[r.status] || STATUS.idle;
+    const node = new PIXI.Container();
+    const glow = new PIXI.Graphics();
+    glow.ellipse(0, 6, 11, 5); glow.fill({ color, alpha: 0.28 });
+    const body = new PIXI.Graphics();
+    drawBox(body, 0, 0, 14, 12, 8, color);
+    const label = new PIXI.Text({
+      text: r.id || "AMR",
+      style: { fontSize: 10, fill: 0xe2e8f0, fontFamily: "ui-monospace, monospace" },
+    });
+    label.anchor.set(0.5, 1); label.y = -14;
+    node.addChild(glow, body, label);
+    node.x = p.x; node.y = p.y;
+    node.zIndex = (r.x || 0) + (r.z || 0);
+    node.__baseY = p.y;
+    node.__status = r.status;
+    world.addChild(node);
+    return node;
+  });
+
+  world.x = app.screen.width * 0.42;
+  world.y = app.screen.height * 0.38;
+  world.scale.set(1.15);
+
+  let dragging = false, lx = 0, ly = 0;
+  app.canvas.style.cursor = "grab";
+  app.canvas.addEventListener("pointerdown", (e) => { dragging = true; lx = e.clientX; ly = e.clientY; app.canvas.style.cursor = "grabbing"; });
+  window.addEventListener("pointerup", () => { dragging = false; app.canvas.style.cursor = "grab"; });
+  window.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    world.x += e.clientX - lx; world.y += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY;
+  });
+  app.canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const next = Math.min(2.2, Math.max(0.55, world.scale.x * (e.deltaY > 0 ? 0.92 : 1.08)));
+    world.scale.set(next);
+  }, { passive: false });
+
+  app.ticker.add(() => {
+    dots.forEach((d) => {
+      d.t = (d.t + d.speed) % 1;
+      const n = d.pts.length - 1;
+      const f = d.t * n;
+      const i = Math.min(n - 1, Math.floor(f));
+      const u = f - i;
+      const a = d.pts[i], b = d.pts[i + 1];
+      d.g.x = a.x + (b.x - a.x) * u;
+      d.g.y = a.y + (b.y - a.y) * u;
+      d.g.zIndex = 999;
+    });
+    const t = performance.now();
+    robots.forEach((n, i) => {
+      if (n.__status === "busy") n.y = n.__baseY + Math.sin(t / 300 + i) * 1.5;
+      if (n.__status === "fault") n.alpha = 0.55 + 0.45 * Math.abs(Math.sin(t / 200));
+    });
+  });
+})().catch((e) => {
+  document.body.insertAdjacentHTML("beforeend",
+    `<div style="position:absolute;inset:0;display:grid;place-items:center;color:#f87171;font:14px sans-serif">Pixi 场景失败：${e}</div>`);
+});
+  </script>
+</body>
+</html>

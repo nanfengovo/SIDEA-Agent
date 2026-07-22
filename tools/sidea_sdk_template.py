@@ -1015,6 +1015,8 @@ def export_dashboard(
     filename: str = "chart_option.json",
     title_en: Optional[str] = None,
     layout: str = "auto",
+    model3d_keyword: Optional[str] = None,
+    template: Optional[str] = None,
 ):
     """Export a multi-panel dashboard as Panel Array protocol.
 
@@ -1059,11 +1061,67 @@ def export_dashboard(
         "type": "dashboard",
         "title": "T_DASH_TITLE",
         "layout": layout,
+        "template": template or "gen_deep_beta",
         "i18n": {"zh-CN": i18n_zh, "en": i18n_en},
         "panels": panels,
     }
 
+    if model3d_keyword:
+        import sqlite3
+        import os
+        db_path = os.path.join(os.path.dirname(__file__), '..', 'config.db')
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                like_query = f"%{model3d_keyword}%"
+                cursor.execute("SELECT file_path FROM agent_3d_models WHERE keyword LIKE ? OR name LIKE ? ORDER BY created_at DESC", (like_query, like_query))
+                row = cursor.fetchone()
+                if row:
+                    payload["model3d_url"] = row['file_path']
+        except Exception as e:
+            pass
+            
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
     return payload
+
+def export_dashboard_v2(
+    title: str,
+    charts: list,
+    template_id: str,
+    filename: str = "chart_option.json",
+    title_en: Optional[str] = None,
+    model3d_keyword: Optional[str] = None,
+):
+    """
+    Export a multi-panel dashboard specifically bound to a predefined React template.
+    This shifts the visual responsibility to the frontend HTML/CSS/Canvas layer.
+    
+    Args:
+        title: Dashboard Title
+        charts: List of chart data dicts. Much simpler than v1.
+        template_id: The ID of the template in the database.
+            NEW HIGH-END TEMPLATES (Choose based on context):
+            - Cyberpunk: 'gen_cyberpunk_alpha' (2x2), 'gen_cyberpunk_beta' (center 3D)
+            - Deep Ocean: 'gen_deep_alpha' (2x2), 'gen_deep_beta' (center 3D)
+            - Industrial: 'gen_industrial_alpha' (2x2), 'gen_industrial_beta' (center 3D)
+            - Holographic: 'gen_holographic_alpha' (2x2), 'gen_holographic_beta' (center 3D)
+            - Glassmorphism: 'gen_glassmorphism_alpha' (2x2), 'gen_glassmorphism_beta' (center 3D)
+        filename: Output JSON filename
+        title_en: English title
+        model3d_keyword: (Optional) Automatically inject a 3D model into the dashboard based on this keyword
+    """
+    if not template_id:
+        raise ValueError("export_dashboard_v2 必须提供 template_id")
+        
+    # Reuse the same payload generator but inject template_id
+    payload = export_dashboard(title=title, charts=charts, filename=filename, title_en=title_en, model3d_keyword=model3d_keyword)
+    payload["template"] = template_id
+    
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        
+    return payload
+

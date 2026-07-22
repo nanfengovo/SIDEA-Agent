@@ -198,7 +198,7 @@ export default function LlmProviderManager() {
     loadProfiles();
   };
 
-  const setDashboardTier = async (id: string, tier: 'template' | 'freeform' | '') => {
+  const setDashboardTier = async (id: string, tier: 'template' | 'freeform' | 'scene' | '') => {
     const p = profiles.find((x) => x.profile_id === id);
     if (!p) return;
     const extra = { ...(p.extra_config || {}) };
@@ -354,15 +354,18 @@ export default function LlmProviderManager() {
         const auto =
           r.provider === 'ollama' ? 'template' : 'freeform';
         const cur = override || auto;
+        const autoLabel =
+          cur === 'scene' ? '沉浸场景' : cur === 'freeform' ? '自由编排' : '模板';
         return (
           <Select
             size="small"
-            style={{ width: 140 }}
+            style={{ width: 150 }}
             value={override || 'auto'}
             onChange={(v) => setDashboardTier(r.profile_id, v === 'auto' ? '' : v)}
             options={[
-              { value: 'auto', label: `自动(${cur === 'freeform' ? '自由出图' : '模板'})` },
-              { value: 'freeform', label: '强制自由出图' },
+              { value: 'auto', label: `自动(${autoLabel})` },
+              { value: 'scene', label: '强制沉浸场景' },
+              { value: 'freeform', label: '强制自由编排' },
               { value: 'template', label: '强制模板档' },
             ]}
           />
@@ -511,7 +514,7 @@ export default function LlmProviderManager() {
                   options={modelSelectOptions}
                   optionFilterProp="label"
                   listHeight={360}
-                  dropdownStyle={{ minWidth: 480 }}
+                  styles={{ popup: { root: { minWidth: 480 } } }}
                   notFoundContent={allModels.length ? '无匹配' : '先拉取列表，或在下方输入模型 ID'}
                 />
               </Form.Item>

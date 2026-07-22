@@ -42,6 +42,8 @@ async def create_agent_for_skill(skill_id: str, db_path: str = "config.db", chec
     try:
         skill_data = registry.load_skill(skill_id)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"Failed to load skill {skill_id}", extra={"error": str(e)})
         # 提供一个退化版本
         skill_data = {
@@ -62,6 +64,20 @@ async def create_agent_for_skill(skill_id: str, db_path: str = "config.db", chec
         
     system_prompt = skill_data["system_prompt"]
     
+    # 动态注入可用大屏模版，让 Agent 能够自动匹配最佳模版
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT template_id, name, description FROM dashboard_templates WHERE is_enabled = 1")
+        templates = cursor.fetchall()
+        if templates:
+            tpl_info = "\n\n【系统预置可用大屏模版列表】(推荐在调用 export_dashboard_v2 时，根据用户需求场景选择最合适的 template_id):\n"
+            for tpl in templates:
+                tpl_info += f"- `{tpl[0]}`: {tpl[1]} - {tpl[2]}\n"
+            system_prompt += tpl_info
+        conn.close()
+    except Exception as e:
+        logger.error(f"Failed to load templates for prompt injection: {e}")
     if not tools:
         from langgraph.graph import StateGraph, START, END
         from langgraph.graph.message import add_messages
@@ -84,84 +100,127 @@ async def create_agent_for_skill(skill_id: str, db_path: str = "config.db", chec
         return workflow.compile(checkpointer=checkpointer)
     
     from langchain.agents.middleware import SummarizationMiddleware, AgentMiddleware, ContextEditingMiddleware, ClearToolUsesEdit
-    from langchain_core.messages import HumanMessage
-    
-    class CompressionNotificationMiddleware(AgentMiddleware):
-        def __init__(self, sse_queue):
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # --- 工具摘要构建函数（压缩后用于重注入，防止模型忘记工具）---
+    def _build_tool_reminder(tools_list: list) -> str:
+        if not tools_list:
+            return ""
+        lines = ["[系统提醒] 以下工具当前可用，遇到相关问题请主动调用："]
+        for t in tools_list:
+            desc = getattr(t, "description", "") or ""
+            lines.append(f"- `{t.name}`: {desc[:80]}")
+        return "\n".join(lines)
+
+    # --- Token 粗估：按平均 4 字符/token 估算，用于触发阈值判断 ---
+    def _estimate_tokens(messages: list) -> int:
+        total_chars = sum(len(str(getattr(m, 'content', '') or '')) for m in messages)
+        return total_chars // 4
+
+    class SmartCompressionMiddleware(AgentMiddleware):
+        """基于 Token 估算的智能压缩中间件。
+        - 触发条件：历史消息估算 token 数超过上下文窗口 65%
+        - 压缩后：自动将工具列表摘要作为 SystemMessage 重注入，防止模型忘记工具
+        """
+        def __init__(self, sse_queue, tools_ref: list, token_limit: int):
             self.sse_queue = sse_queue
-            
+            self.tools_ref = tools_ref
+            self.compress_threshold = max(int(token_limit * 0.65), 4096)
+            self.clear_threshold = max(int(token_limit * 0.75), 5000)
+
         async def awrap_model_call(self, request, handler):
-            if len(request.messages) > 15 and self.sse_queue:
-                import uuid
+            import uuid
+            msgs = request.messages or []
+            estimated = _estimate_tokens(msgs)
+
+            needs_compress = estimated > self.compress_threshold or len(msgs) > 12
+
+            if needs_compress and self.sse_queue:
                 await self.sse_queue.put({
                     "id": uuid.uuid4().hex,
                     "type": "tool_start",
                     "data": {
                         "name": "ContextCompressor",
-                        "input": f"检测到历史消息已达 {len(request.messages)} 条",
-                        "message": "⚠️ 历史记忆过长，正在触发智能压缩与提纯算法..."
+                        "input": f"历史约 {estimated} tokens / {len(msgs)} 条，超过阈值 {self.compress_threshold}",
+                        "message": f"⚠️ 上下文已达 ~{estimated} tokens，正在智能压缩历史记忆..."
                     }
                 })
-                
-                response = await handler(request)
-                
+
+            response = await handler(request)
+
+            if needs_compress and self.sse_queue:
                 await self.sse_queue.put({
                     "id": uuid.uuid4().hex,
                     "type": "tool_end",
                     "data": {
                         "name": "ContextCompressor",
                         "output": "压缩完成",
-                        "message": "记忆提纯完成，已成功释放上下文空间！"
+                        "message": "记忆压缩完成！工具定义已自动重注入，确保模型随时可调用。"
                     }
                 })
-                return response
-            return await handler(request)
 
-    # 原始的中间件配置
+            return response
+
+    # --- 动态阈值（按窗口大小自适应）---
+    clear_trigger = max(int(num_ctx * 0.75), 5000)
+
     middleware_list = [
-        CompressionNotificationMiddleware(sse_queue),
+        SmartCompressionMiddleware(sse_queue, tools, num_ctx),
         SummarizationMiddleware(
             model=llm,
             trigger=[
-                ("messages", 15), # 当历史消息超过 15 条时触发摘要
+                ("messages", 12),  # 消息条数兜底（防低 token 估算误差）
             ],
-            keep=("messages", 3), # 强制保留最近的 3 条消息原文，其余的老历史浓缩为一条摘要
-            summary_prompt="请用精简的语言总结以下历史对话记录，保留核心意图和关键信息：\n{messages}"
+            keep=("messages", 4),  # 保留最近 4 条原文（足够保留完整一轮 tool call 往返）
+            summary_prompt=(
+                "请极简地总结以下历史对话，**重点保留**：用户核心需求、关键参数/数据、工具调用结果摘要。"
+                "省略所有礼貌用语、重复解释和中间过程，输出纯中文，控制在 200 字以内。\n{messages}"
+            )
         ),
         ContextEditingMiddleware(
             edits=[
                 ClearToolUsesEdit(
-                    trigger=64000,
-                    keep=3,
+                    trigger=clear_trigger,  # 动态阈值，对 8K 本地模型约为 6144 token
+                    keep=1,                 # 只保留最近 1 轮工具调用记录
                 ),
             ],
         ),
     ]
     
-    # 强制工具执行拦截 (Level 1 Defense - 中间件 Output Validator)
-    if force_tool and tools:
+    # 工具执行自动修正拦截器 (Level 1 Defense - 中间件 Output Validator)
+    if tools:
         class AutofixMiddleware(AgentMiddleware):
             async def awrap_model_call(self, request, handler):
-                is_autofix = False
+                is_explicit_autofix = False
                 if request.messages:
                     last_msg = request.messages[-1]
                     if hasattr(last_msg, "content") and "[系统异常拦截]" in str(last_msg.content):
-                        is_autofix = True
+                        is_explicit_autofix = True
                         
                 # 遇到假执行时最多重试 3 次
                 for attempt in range(3):
                     response = await handler(request)
                     ai_msg = response.result[0] if (response and response.result) else None
                     
-                    # 如果当前是自动修复环节，且模型仍然没有输出 tool_calls，则视为假执行幻觉
-                    if is_autofix and ai_msg and not getattr(ai_msg, "tool_calls", None):
-                        # 将失败的输出加入上下文，并追加强烈的系统警告，强制其重新生成
-                        new_messages = list(request.messages)
-                        new_messages.append(ai_msg)
-                        new_messages.append(HumanMessage(content="[System] INVALID. You MUST output a tool call JSON. Do NOT output markdown or plain text."))
-                        request = request.override(messages=new_messages)
-                        continue
+                    if ai_msg and not getattr(ai_msg, "tool_calls", None):
+                        # 判断是否需要强制重试
+                        needs_retry = is_explicit_autofix
                         
+                        # 隐式自动拦截：上一步是工具报错，但大模型试图装作成功输出文本（无 tool_calls）
+                        if not needs_retry and request.messages:
+                            last_req_msg = request.messages[-1]
+                            # 如果最后一条消息是工具执行结果，且包含报错特征（例如 "❌"）
+                            if getattr(last_req_msg, "type", "") == "tool" and "❌" in str(getattr(last_req_msg, "content", "")):
+                                needs_retry = True
+                                
+                        if needs_retry:
+                            # 将失败的输出加入上下文，并追加强烈的系统警告，强制其重新生成
+                            new_messages = list(request.messages)
+                            new_messages.append(ai_msg)
+                            new_messages.append(HumanMessage(content="[System] INVALID. Tool execution failed in the previous step, or you outputted invalid text. You MUST output a tool call JSON with FIXED arguments to retry. Do NOT output markdown or plain text until the tool succeeds."))
+                            request = request.override(messages=new_messages)
+                            continue
+                            
                     return response
                 return response
                 

@@ -302,7 +302,7 @@ export default function ConfigManager() {
                 { value: 'gpt-image-2', label: 'gpt-image-2' },
                 { value: 'gpt-image-2-beta', label: 'gpt-image-2-beta' },
               ]}
-              dropdownStyle={{ background: '#1a1a2e' }}
+              styles={{ popup: { root: { background: '#1a1a2e' } } }}
               className="w-full"
             />
           </div>

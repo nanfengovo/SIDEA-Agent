@@ -17,10 +17,12 @@ import { getBaseUrl } from '../config';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../store';
 import {
-  applyThemeToOption,
   DashboardGrid,
   normalizeChartPayload,
+  applyThemeToOption,
 } from './DashboardPanel';
+import { TemplatedDashboard } from './TemplatedDashboard';
+import { DashboardV2, isDashboardDslV2, DashboardV2Shell } from '../dashboard';
 
 mermaid.initialize({
   startOnLoad: false,
@@ -78,6 +80,51 @@ function isPlaceholderChartUrl(url: string): boolean {
   if (/\/sandbox_workspace\/chart_/i.test(u) && !/\/sandbox_workspace\/chart_\d+\.json/i.test(u)) return true;
   return false;
 }
+
+function isPlaceholderSceneUrl(url: string): boolean {
+  const u = (url || '').trim();
+  if (!u) return true;
+  if (/scene_x+|scene_placeholder|scene_example|scene_demo/i.test(u)) return true;
+  if (/\/sandbox_workspace\/scene_/i.test(u) && !/\/sandbox_workspace\/scene_\d+\.html/i.test(u)) return true;
+  return false;
+}
+
+/** 沙箱 Three.js / HTML 场景：iframe + sandbox 隔离 */
+const SceneHtmlFrame = ({ url }: { url: string }) => {
+  const { theme } = useAppStore();
+  const fake = isPlaceholderSceneUrl(url);
+  if (fake) {
+    return (
+      <div className="my-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-xs text-amber-200/90">
+        场景 URL 无效或为占位符，无法 iframe 渲染。
+      </div>
+    );
+  }
+  const urlWithTheme = url.includes('?') ? `${url}&theme=${theme}` : `${url}?theme=${theme}`;
+  
+  return (
+    <div className="my-4 overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-sm">
+      <div className="flex items-center justify-between border-b border-[var(--border-color)] px-3 py-2 text-[11px] tracking-wide text-[var(--text-secondary)]">
+        <span>SCENE · HTML + Three.js（sandbox iframe）</span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--accent-cyan)] hover:underline"
+        >
+          新窗口打开
+        </a>
+      </div>
+      <iframe
+        title="SIDEA Scene"
+        src={urlWithTheme}
+        className="block h-[min(72vh,720px)] w-full bg-[var(--bg-primary)]"
+        sandbox="allow-scripts allow-same-origin"
+        referrerPolicy="no-referrer"
+      />
+    </div>
+  );
+};
 
 const AsyncEChartsWrapper = ({
   url,
@@ -157,6 +204,30 @@ const AsyncEChartsWrapper = ({
   }
 
   if (payload.kind === 'dashboard') {
+    if (payload.template) {
+      return (
+        <TemplatedDashboard
+          title={payload.title}
+          panels={payload.panels}
+          theme={theme}
+          templateId={payload.template}
+          language={activeLang}
+          model3d_url={payload.model3d_url}
+          dsl={payload.dsl}
+        />
+      );
+    }
+    // Native DSL v2 → widget registry renderer
+    if (payload.dsl && isDashboardDslV2(payload.dsl)) {
+      return (
+        <DashboardV2Shell
+          doc={payload.dsl}
+          theme={theme}
+          language={activeLang}
+          sourceCode={JSON.stringify(raw, null, 2)}
+        />
+      );
+    }
     return (
       <DashboardGrid
         title={payload.title}
@@ -200,6 +271,29 @@ const MarkdownRenderer = React.memo(({ content, isTyping, onAutoFixRequest, disp
 
       if (!inline && lang === 'mermaid') {
         return <MermaidChart chart={codeString} isTyping={isTyping} />;
+      }
+
+      if (!inline && (lang === 'scene-html' || lang === 'scene_html' || lang === 'scene')) {
+        const urlMatch =
+          codeString.match(/https?:\/\/[^\s"'`]+?\.html/i) ||
+          codeString.match(/https?:\/\/[^\s"'`]+\/sandbox_workspace\/scene_\d+\.html/i);
+        if (urlMatch) {
+          return <SceneHtmlFrame url={urlMatch[0]} />;
+        }
+        if (isTyping) {
+          return (
+            <div className="w-full h-[160px] flex flex-col items-center justify-center border border-[var(--accent-cyan)]/30 rounded-xl bg-[var(--accent-cyan)]/5 my-4 text-[var(--accent-cyan)]">
+              <Loader className="animate-spin mb-3" size={24} />
+              <span className="text-sm font-bold tracking-widest animate-pulse">三维场景构建中…</span>
+            </div>
+          );
+        }
+        return (
+          <div className="my-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+            期望 ```scene-html``` 内为 sandbox_workspace/scene_*.html 的 URL。
+            <pre className="mt-2 max-h-32 overflow-auto rounded-lg bg-black/30 p-2 text-[11px] whitespace-pre-wrap">{codeString}</pre>
+          </div>
+        );
       }
       
       // Python + SDK：有图表产物时正常展示代码；无产物时只提示，不自动发起 autofix（避免死循环）
@@ -279,6 +373,16 @@ const MarkdownRenderer = React.memo(({ content, isTyping, onAutoFixRequest, disp
             throw new Error('解析失败：JSON 不是可识别的 ECharts option / dashboard 结构。');
           }
           if (normalized.kind === 'dashboard') {
+            if (normalized.dsl && isDashboardDslV2(normalized.dsl)) {
+              return (
+                <DashboardV2Shell
+                  doc={normalized.dsl}
+                  theme={theme}
+                  language={activeLang}
+                  sourceCode={codeString}
+                />
+              );
+            }
             return (
               <DashboardGrid
                 title={normalized.title}

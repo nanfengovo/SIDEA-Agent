@@ -376,7 +376,18 @@ async def chat_stream(req: ChatRequest, request: Request, background_tasks: Back
                         elif kind == "on_chat_model_stream":
                             chunk = event["data"]["chunk"]
                             token = chunk.content if hasattr(chunk, "content") else str(chunk)
-                            if token is not None:
+                            if isinstance(token, list):
+                                text_parts = []
+                                for t in token:
+                                    if isinstance(t, dict) and "text" in t:
+                                        text_parts.append(t["text"])
+                                    elif isinstance(t, str):
+                                        text_parts.append(t)
+                                token = "".join(text_parts)
+                            elif not isinstance(token, str):
+                                token = str(token)
+                                
+                            if token:
                                 full_agent_reply += token
                                 out_event = {"id": uuid.uuid4().hex, "type": "llm_token", "data": {"token": token}}
                         elif kind == "on_chat_model_end":
@@ -460,7 +471,7 @@ async def chat_stream(req: ChatRequest, request: Request, background_tasks: Back
                 # 彻底消灭「代码写了、沙箱跑了、用户却看不到大屏」的断链。
                 delivery_parts: list[str] = []
                 for u in produced_chart_urls:
-                    if u not in full_agent_reply:
+                    if f"```echarts-i18n\n{u}\n```" not in full_agent_reply and f"```echarts-i18n\n{u}```" not in full_agent_reply:
                         delivery_parts.append(f"\n\n```echarts-i18n\n{u}\n```\n")
                 for u in produced_image_urls:
                     if u not in full_agent_reply:

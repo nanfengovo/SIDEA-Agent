@@ -30,7 +30,7 @@ function formatTokens(n?: number): string {
   return String(n);
 }
 
-export default function RunSummaryFooter({ summary }: { summary?: RunSummary | null }) {
+export default function RunSummaryFooter({ summary, toolsMeta }: { summary?: RunSummary | null, toolsMeta?: Record<string, {name: string, description: string}> }) {
   if (!summary) return null;
 
   const tools = summary.tools?.length ? summary.tools : [];
@@ -77,14 +77,27 @@ export default function RunSummaryFooter({ summary }: { summary?: RunSummary | n
             <Wrench size={12} />
             工具 ({tools.length})
           </span>
-          {tools.map((t) => (
-            <span
-              key={t}
-              className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-primary)]"
-            >
-              {t}
-            </span>
-          ))}
+          {tools.map((t) => {
+            let meta = toolsMeta?.[t];
+            if (!meta) {
+              if (t === 'goal_orchestrator') meta = { name: '总控协调器 (Agent)', description: '负责核心任务拆解、路径规划与全局子节点调度。' };
+              else if (t === 'goal:data_hints') meta = { name: '数据线索收割 (Sub-agent)', description: '负责收集底层系统 (如 RCS/PLC) 的核心异常数据与运行线索。' };
+              else if (t === 'goal:scene_plan') meta = { name: '场景构建规划 (Sub-agent)', description: '分析三维大屏的呈现需求，输出场景结构蓝图。' };
+              else if (t === 'goal:scene_author') meta = { name: '场景代码生成 (Sub-agent)', description: '基于场景蓝图，编写包含 3D 渲染和 HTML 界面的最终大屏代码。' };
+              else if (t === 'goal:scene_review') meta = { name: '场景审查验收 (Sub-agent)', description: '对生成的场景大屏代码进行前端沙箱验证和错误审查。' };
+              else if (t === 'ContextCompressor') meta = { name: '上下文压缩器 (Middleware)', description: '当记忆过长时触发的智能摘要算法，用于释放无用上下文空间。' };
+            }
+            const hoverText = meta ? `${meta.name}\n${meta.description}` : undefined;
+            return (
+              <span
+                key={t}
+                title={hoverText}
+                className={`rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-primary)] ${meta ? 'cursor-help' : ''}`}
+              >
+                {t}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

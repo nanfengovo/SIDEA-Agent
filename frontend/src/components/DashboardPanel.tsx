@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
@@ -53,6 +53,10 @@ export type NormalizedDashboard = {
   title?: string;
   panels: DashboardPanelItem[];
   raw?: any;
+  template?: string;
+  /** DSL v2 document when present — prefer widget renderer */
+  dsl?: import('../dashboard/types').DashboardDslV2;
+  model3d_url?: string;
 };
 
 /** Resolve i18n placeholders: bare keys (T_TITLE) or braced ({T_TITLE}). */
@@ -190,6 +194,28 @@ export function normalizeChartPayload(
 ): { kind: 'single'; option: any; raw?: any } | NormalizedDashboard | null {
   if (!parsed) return null;
 
+  // DSL v2 first
+  if (
+    parsed.type === 'dashboard' &&
+    Number(parsed.dsl_version) === 2 &&
+    Array.isArray(parsed.layout) &&
+    parsed.data &&
+    typeof parsed.data === 'object'
+  ) {
+    const dict = pickI18nDict(parsed.i18n, language);
+    const title = typeof parsed.title === 'string' ? applyI18n(parsed.title, dict) : undefined;
+    // Keep empty panels for export/toolbar compatibility; rendering uses dsl
+    return {
+      kind: 'dashboard',
+      title: title ? finalizeLocalizedString(String(title), language) : undefined,
+      panels: [],
+      raw: parsed,
+      template: parsed.template,
+      dsl: parsed,
+      model3d_url: parsed.model3d_url,
+    };
+  }
+
   if (parsed.type === 'dashboard' && Array.isArray(parsed.panels) && parsed.panels.length > 0) {
     const dict = pickI18nDict(parsed.i18n, language);
     const title = typeof parsed.title === 'string' ? applyI18n(parsed.title, dict) : undefined;
@@ -210,6 +236,8 @@ export function normalizeChartPayload(
       title: title ? finalizeLocalizedString(String(title), language) : undefined,
       panels,
       raw: parsed,
+      template: parsed.template,
+      model3d_url: parsed.model3d_url,
     };
   }
 
@@ -312,10 +340,19 @@ export function applyThemeToOption(option: any, theme: string, language?: string
 
   cloned.backgroundColor = 'transparent';
   if (cloned.title) {
-    const titles = Array.isArray(cloned.title) ? cloned.title : [cloned.title];
-    titles.forEach((title: any) => {
-      title.textStyle = { ...(title.textStyle || {}), color: t.text };
-    });
+    if (Array.isArray(cloned.title)) {
+      cloned.title = cloned.title.map((title: any) => {
+        if (typeof title === 'string') return { text: title, textStyle: { color: t.text } };
+        title.textStyle = { ...(title.textStyle || {}), color: t.text };
+        return title;
+      });
+    } else {
+      if (typeof cloned.title === 'string') {
+        cloned.title = { text: cloned.title, textStyle: { color: t.text } };
+      } else {
+        cloned.title.textStyle = { ...(cloned.title.textStyle || {}), color: t.text };
+      }
+    }
   }
   if (cloned.legend) {
     const legends = Array.isArray(cloned.legend) ? cloned.legend : [cloned.legend];
@@ -335,6 +372,12 @@ export function applyThemeToOption(option: any, theme: string, language?: string
     legends.forEach((lg: any) => (lg.data || []).forEach((d: any) => legendNames.add(typeof d === 'string' ? d : d?.name)));
   }
   if (Array.isArray(cloned.series)) {
+    cloned.series = cloned.series.filter((s: any) => s != null).map((s: any) => {
+      if (!s.type || s.type === 'undefined') {
+        s.type = 'bar';
+      }
+      return s;
+    });
     cloned.series.forEach((s: any) => {
       if (s?.name) legendNames.add(s.name);
       if (s?.type === 'pie' && Array.isArray(s.data)) s.data.forEach((d: any) => d?.name && legendNames.add(d.name));
@@ -527,18 +570,79 @@ export function applyThemeToOption(option: any, theme: string, language?: string
           ...(s.itemStyle || {}),
           borderRadius: s.itemStyle?.borderRadius ?? [5, 5, 0, 0],
           color: vGradient(base, 0.95, 0.25),
+          shadowBlur: isDarkTheme ? 8 : 0,
+          shadowColor: isDarkTheme ? hexToRgba(base, 0.5) || 'transparent' : 'transparent',
+          borderColor: isDarkTheme ? hexToRgba(base, 0.8) || 'transparent' : 'transparent',
+          borderWidth: isDarkTheme ? 1 : 0,
         };
       }
       if (s?.type === 'line') {
         s.smooth = s.smooth ?? true;
         s.symbol = s.symbol ?? 'circle';
-        s.symbolSize = s.symbolSize ?? 5;
-        s.lineStyle = { width: 2.5, ...(s.lineStyle || {}) };
+        s.symbolSize = s.symbolSize ?? 6;
+        s.lineStyle = { 
+          width: 3, 
+          ...(s.lineStyle || {}),
+          shadowBlur: isDarkTheme ? 12 : 0,
+          shadowColor: isDarkTheme ? base : 'transparent'
+        };
+        s.itemStyle = {
+          ...(s.itemStyle || {}),
+          color: base,
+          borderColor: isDarkTheme ? '#fff' : base,
+          borderWidth: 2,
+          shadowBlur: isDarkTheme ? 15 : 0,
+          shadowColor: isDarkTheme ? base : 'transparent'
+        };
         if (!s.areaStyle && seriesList.filter((x: any) => x?.type === 'line').length <= 3) {
-          s.areaStyle = { color: vGradient(base, 0.28, 0.02) };
+          s.areaStyle = { color: vGradient(base, 0.35, 0.02) };
         }
       }
+      if (s?.type === 'pie') {
+        s.itemStyle = {
+          ...(s.itemStyle || {}),
+          borderWidth: isDarkTheme ? 2 : 1,
+          borderColor: isDarkTheme ? '#0B101E' : '#fff',
+          borderRadius: 6,
+        };
+      }
+      if (s?.type === 'radar') {
+        s.lineStyle = { width: 2, shadowBlur: isDarkTheme ? 10 : 0, shadowColor: isDarkTheme ? base : 'transparent' };
+        s.areaStyle = { color: vGradient(base, 0.4, 0.1) };
+      }
     });
+
+    if (hasCartesian && isDarkTheme) {
+      ['xAxis', 'yAxis'].forEach((axisType) => {
+        if (cloned[axisType]) {
+          const axes = Array.isArray(cloned[axisType]) ? cloned[axisType] : [cloned[axisType]];
+          axes.forEach((axis: any) => {
+            if (axis.splitLine?.show !== false) {
+              axis.splitLine = {
+                ...(axis.splitLine || {}),
+                lineStyle: { color: 'rgba(34,211,238,0.08)', type: 'dashed' }
+              };
+            }
+            if (axis.axisLine?.show !== false) {
+              axis.axisLine = {
+                ...(axis.axisLine || {}),
+                lineStyle: { color: 'rgba(34,211,238,0.3)', shadowBlur: 5, shadowColor: 'rgba(34,211,238,0.5)' }
+              };
+            }
+            axis.axisLabel = { ...(axis.axisLabel || {}), color: '#94a3b8' };
+          });
+        }
+      });
+    }
+
+    if (cloned.radar && isDarkTheme) {
+      const radars = Array.isArray(cloned.radar) ? cloned.radar : [cloned.radar];
+      radars.forEach((r: any) => {
+        r.splitLine = { lineStyle: { color: 'rgba(34,211,238,0.15)' } };
+        r.splitArea = { areaStyle: { color: ['rgba(34,211,238,0.02)', 'rgba(34,211,238,0.05)'] } };
+        r.axisLine = { lineStyle: { color: 'rgba(34,211,238,0.2)' } };
+      });
+    }
 
     if (hasCartesian) {
       cloned.tooltip = {
@@ -666,7 +770,7 @@ function openDashboardInNewTab(payload: {
   }
 }
 
-function DashboardChart({
+export function DashboardChart({
   option,
   theme,
   height,
@@ -685,6 +789,45 @@ function DashboardChart({
     return series.every((s: any) => !Array.isArray(s?.data) || s.data.length === 0);
   }, [themed]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const echartsRef = useRef<any>(null);
+
+  const doResize = useCallback(() => {
+    try {
+      echartsRef.current?.getEchartsInstance()?.resize();
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('resize', doResize);
+    return () => window.removeEventListener('resize', doResize);
+  }, [doResize]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 10 && entry.contentRect.height > 10) {
+          doResize();
+        }
+      }
+    });
+    ro.observe(containerRef.current);
+
+    const timer1 = setTimeout(doResize, 50);
+    const timer2 = setTimeout(doResize, 150);
+    const timer3 = setTimeout(doResize, 350);
+
+    return () => {
+      ro.disconnect();
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, [themed, doResize]);
+
   if (isEmpty) {
     return (
       <div
@@ -697,14 +840,17 @@ function DashboardChart({
   }
 
   return (
-    <ReactECharts
-      option={themed}
-      style={{ height, width: '100%' }}
-      theme={theme}
-      notMerge={true}
-      lazyUpdate={true}
-      opts={{ renderer: 'canvas' }}
-    />
+    <div ref={containerRef} className="w-full h-full min-w-0 min-h-0 overflow-hidden relative flex flex-col">
+      <ReactECharts
+        ref={echartsRef}
+        option={themed}
+        style={{ height: '100%', width: '100%', minWidth: '100%', flex: 1 }}
+        theme={theme}
+        notMerge={false}
+        lazyUpdate={true}
+        opts={{ renderer: 'canvas' }}
+      />
+    </div>
   );
 }
 
@@ -733,7 +879,7 @@ export function DashboardGrid({
   language?: string;
 }) {
   const { i18n } = useTranslation();
-  const { language } = useAppStore();
+  const { language, enableAnimations } = useAppStore();
   const activeLang = languageOverride || language || i18n.language;
   const overlayRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<HTMLDivElement>(null);
@@ -900,18 +1046,28 @@ export function DashboardGrid({
       className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b shrink-0"
       style={{ borderColor: tokens.border, background: theme === 'dark' ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.75)' }}
     >
-      <div className="min-w-0">
-        <div
-          className={`font-bold tracking-wide truncate ${fullscreen ? 'text-lg' : 'text-sm'}`}
-          style={{ color: tokens.accent }}
-        >
-          {title || L('工业监控大屏', 'Industrial Dashboard')}
+      <div className="min-w-0 flex items-center gap-3">
+        {/* 实时系统连线指示圈 */}
+        <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[10px] font-mono">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          LIVE • {L('系统连线', 'ACTIVE')}
         </div>
-        <div className="text-[11px] mt-0.5" style={{ color: tokens.muted }}>
-          {L(
-            `${panels.length} 个独立面板 · 主题随系统切换 · 支持中英双语`,
-            `${panels.length} panels · theme-aware · bilingual`
-          )}
+        <div>
+          <div
+            className={`font-bold tracking-wide truncate ${fullscreen ? 'text-lg' : 'text-sm'}`}
+            style={{ color: tokens.accent }}
+          >
+            {title || L('工业监控大屏', 'Industrial Dashboard')}
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: tokens.muted }}>
+            {L(
+              `${panels.length} 个独立面板 · 实时渲染引擎 · 高科技主题`,
+              `${panels.length} panels · Realtime engine · High-tech theme`
+            )}
+          </div>
         </div>
       </div>
 
@@ -1026,29 +1182,42 @@ export function DashboardGrid({
             return (
               <div
                 key={panel.id || idx}
-                className="min-w-0 rounded-xl overflow-hidden flex flex-col relative"
+                className="min-w-0 rounded-xl overflow-hidden flex flex-col relative group"
                 style={{
-                  border: `1px solid ${isDark ? 'rgba(34,211,238,0.16)' : tokens.border}`,
+                  border: `1px solid ${isDark ? 'rgba(34,211,238,0.22)' : tokens.border}`,
                   background: isDark
-                    ? 'linear-gradient(180deg, rgba(23,32,52,0.82) 0%, rgba(13,19,33,0.92) 100%)'
+                    ? 'linear-gradient(180deg, rgba(23,32,52,0.85) 0%, rgba(11,16,28,0.95) 100%)'
                     : tokens.panelBg,
                   height: cellH,
                   gridColumn: spanCol > 1 ? `span ${spanCol}` : undefined,
                   gridRow: spanRow > 1 ? `span ${spanRow}` : undefined,
                   boxShadow: isDark
-                    ? 'inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(2,8,20,0.45)'
+                    ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 30px rgba(2,8,20,0.55)'
                     : '0 1px 2px rgba(15,23,42,0.04)',
                 }}
               >
                 {/* 顶部霓虹光带：呼应工业大屏视觉 */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
-                  style={{
-                    background: isDark
-                      ? 'linear-gradient(90deg, transparent, rgba(34,211,238,0.55) 30%, rgba(59,130,246,0.45) 70%, transparent)'
-                      : 'linear-gradient(90deg, transparent, rgba(8,145,178,0.35) 50%, transparent)',
-                  }}
-                />
+                {enableAnimations && (
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none z-10"
+                    style={{
+                      background: isDark
+                        ? 'linear-gradient(90deg, transparent, rgba(34,211,238,0.7) 30%, rgba(59,130,246,0.6) 70%, transparent)'
+                        : 'linear-gradient(90deg, transparent, rgba(8,145,178,0.35) 50%, transparent)',
+                    }}
+                  />
+                )}
+                
+                {/* 暗色模式下四角 HUD 科技拐角标 */}
+                {isDark && enableAnimations && (
+                  <>
+                    <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-cyan-400/60 pointer-events-none z-10 transition-colors group-hover:border-cyan-400" />
+                    <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-cyan-400/60 pointer-events-none z-10 transition-colors group-hover:border-cyan-400" />
+                    <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-cyan-400/60 pointer-events-none z-10 transition-colors group-hover:border-cyan-400" />
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-cyan-400/60 pointer-events-none z-10 transition-colors group-hover:border-cyan-400" />
+                  </>
+                )}
+
                 <div className="flex-1 min-h-0 w-full" style={{ height: cellH }}>
                   <DashboardChart
                     option={panel.option}

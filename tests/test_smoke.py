@@ -63,7 +63,8 @@ def test_nxp_seed_idempotent():
         assert len(bindings) == 10
 
 
-def test_freeform_empty_hero_fallback():
+def test_freeform_legacy_panels_to_dsl_v2():
+    """旧 panels[].option 应转为 DSL v2（含 amr 地图 widget）。"""
     from agent.goal_pipeline import _normalize_freeform_dashboard
 
     raw = {
@@ -77,7 +78,14 @@ def test_freeform_empty_hero_fallback():
                 "title": "AMR 仿真地图",
                 "title_en": "AMR Map",
                 "span": {"col": 2, "row": 2},
-                "option": {"xAxis": {}, "yAxis": {}, "series": [{"type": "scatter", "data": []}]},
+                "option": {
+                    "xAxis": {},
+                    "yAxis": {},
+                    "series": [
+                        {"type": "scatter", "data": [], "markArea": {"data": [[{}, {}]]}},
+                        {"type": "effectScatter", "data": [{"value": [1, 2]}]},
+                    ],
+                },
             },
             {
                 "id": "p1",
@@ -100,10 +108,10 @@ def test_freeform_empty_hero_fallback():
     }
     out = _normalize_freeform_dashboard(raw, "RCS AMR 任务执行大屏")
     assert out is not None
-    ids = [p["id"] for p in out["panels"]]
-    assert "p0" not in ids
-    assert ids[0] == "p_hero"
-    assert out["panels"][0]["span"] == {"col": 2, "row": 2}
+    assert out.get("dsl_version") == 2
+    assert isinstance(out.get("layout"), list) and len(out["layout"]) >= 2
+    widgets = [x.get("widget") for x in out["layout"]]
+    assert "amr_floor_map" in widgets or "amr_iso_map" in widgets
 
 
 def test_demo_amr_deterministic(tmp_path):

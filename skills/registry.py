@@ -18,10 +18,13 @@ from tools.data_tools import clean_data, split_log, text_to_sql
 from tools.time_tools import get_current_time
 from tools.sandbox_tools import run_python_in_sandbox
 from tools.image_tools import generate_image
+from tools.model3d_tools import set_active_3d_model
 from integrations.rcs.semantic_tools import get_rcs_tool_map
+from skills.rcs_readonly_tools import query_erack_slot_state, fetch_shift_metrics, fetch_active_alarms
+from tools.dashboard_tools import list_dashboard_templates, recommend_dashboard_template, render_dashboard, get_dashboard_stats
 
 # 所有 skill 都默认挂载的基础工具（不需要在 DB 中逐一声明）
-BASE_TOOLS = [get_current_time, read_document, run_python_in_sandbox, generate_image]
+BASE_TOOLS = [get_current_time, read_document, run_python_in_sandbox, generate_image, set_active_3d_model]
 
 TOOL_MAP = {
     "get_current_time": get_current_time,
@@ -42,6 +45,14 @@ TOOL_MAP = {
     "text_to_sql": text_to_sql,
     "run_python_in_sandbox": run_python_in_sandbox,
     "generate_image": generate_image,
+    "query_erack_slot_state": query_erack_slot_state,
+    "fetch_shift_metrics": fetch_shift_metrics,
+    "fetch_active_alarms": fetch_active_alarms,
+    "set_active_3d_model": set_active_3d_model,
+    "list_dashboard_templates": list_dashboard_templates,
+    "recommend_dashboard_template": recommend_dashboard_template,
+    "render_dashboard": render_dashboard,
+    "get_dashboard_stats": get_dashboard_stats,
 }
 
 # 合并 RCS 语义工具（fetch_task_stats / fetch_agv_status / fetch_alarms / rcs_*）
@@ -101,8 +112,10 @@ class SkillRegistry:
                 logger.warning(f"Tool {tname} is mapped in DB but not found in codebase.")
                 
         # 合并 BASE_TOOLS（去重），确保 get_current_time 始终可用
-        base_tool_names = {t.name for t in BASE_TOOLS}
-        merged_tools = list(BASE_TOOLS) + [t for t in actual_tools if t.name not in base_tool_names]
+        # 安全过滤：仅保留拥有 .name 属性的正规 LangChain Tool 对象
+        safe_base_tools = [t for t in BASE_TOOLS if hasattr(t, "name")]
+        base_tool_names = {t.name for t in safe_base_tools}
+        merged_tools = list(safe_base_tools) + [t for t in actual_tools if hasattr(t, "name") and t.name not in base_tool_names]
 
         return {
             "skill_id": skill_data["skill_id"],
