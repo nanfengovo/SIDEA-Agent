@@ -1,5 +1,6 @@
 import React from 'react';
 import IframeViewer from './IframeViewer';
+import ZhaoxiFactoryDashboard from './ZhaoxiFactoryDashboard';
 
 interface StyleConfig {
   bg: string;
@@ -105,20 +106,26 @@ interface Props {
   fill?: boolean; // fill container completely
 }
 
-export const DashboardTemplatePreview: React.FC<Props> = ({
-  style,
-  category,
-  scenario,
-  name,
-  subcategory,
-  tags = [],
-  has3d = false,
-  miniature = false,
-  previewUrl,
-  width,
-  height,
-  fill = false,
-}) => {
+export const DashboardTemplatePreview: React.FC<Props> = (props) => {
+  const {
+    style,
+    category,
+    scenario,
+    name,
+    subcategory,
+    tags = [],
+    has3d = false,
+    miniature = false,
+    previewUrl,
+    width,
+    height,
+    fill = false,
+  } = props;
+
+  if (subcategory === 'zhaoxi_factory' || name.includes('朝夕') || scenario === 'zhaoxi_factory') {
+    return <ZhaoxiFactoryDashboard fill={fill} />;
+  }
+
   const s = getStyle(style);
 
   // External iframe integration (only in full preview mode)

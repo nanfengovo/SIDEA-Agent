@@ -161,14 +161,14 @@ def _default_scene_data(message: str) -> Dict[str, Any]:
 
 
 def pick_scene_engine(message: str, scene_data: Optional[dict] = None) -> str:
-    """Default Pixi 2.5D; Three.js when user explicitly wants true 3D."""
+    """Default Three.js for commercial models; Pixi 2.5D when explicitly requested."""
     if isinstance(scene_data, dict):
         eng = str(scene_data.get("engine") or "").strip().lower()
         if eng in ("pixi", "three"):
             return eng
-    if _TRUE_3D.search(message or ""):
-        return "three"
-    return "pixi"
+    if re.search(r"pixi", message or "", re.I):
+        return "pixi"
+    return "three"
 
 
 def _normalize_scene_data(raw: Optional[dict], message: str) -> Dict[str, Any]:

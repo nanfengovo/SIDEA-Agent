@@ -32,6 +32,11 @@ if __name__ == "__main__":
         seed_default_llm_profiles("config.db")
     except Exception as e:
         print(f"[main] LLM seed skipped: {e}")
+    try:
+        from plugins.manager import PluginManager
+        PluginManager().load_plugins(app=app, db_path="config.db")
+    except Exception as e:
+        print(f"[main] Plugin load skipped: {e}")
 
     host = os.environ.get("SIDEA_HOST", "0.0.0.0")
     port = int(os.environ.get("SIDEA_PORT", "8000"))

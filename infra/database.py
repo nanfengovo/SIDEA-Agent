@@ -18,9 +18,11 @@ def get_connection(db_path: str = "config.db") -> sqlite3.Connection:
         
     actual_path.parent.mkdir(parents=True, exist_ok=True)
     
-    conn = sqlite3.connect(actual_path, timeout=10.0)
+    conn = sqlite3.connect(actual_path, timeout=15.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=10000;")
         yield conn
     finally:
         conn.close()

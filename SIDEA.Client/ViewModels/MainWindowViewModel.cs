@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SIDEA.Client.Services;
 using SIDEA.Client.Views;
 
 namespace SIDEA.Client.ViewModels;
@@ -37,8 +39,18 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _contextLengthDisplay = "上下文: 8K";
 
+    [ObservableProperty]
+    private string _executionModeDisplay = "执行: 自动";
+
     public ObservableCollection<string> ThinkingDepths { get; } = new() { "深度: 自动", "深度: 深度推理", "深度: 快速响应" };
     public ObservableCollection<string> ContextLengths { get; } = new() { "上下文: 8K", "上下文: 32K", "上下文: 128K" };
+    public ObservableCollection<string> ExecutionModes { get; } = new() { "执行: 自动", "执行: Goal拆分", "执行: ReAct模式" };
+
+    private string GetExecutionModeValue() => ExecutionModeDisplay switch {
+        "执行: Goal拆分" => "goal",
+        "执行: ReAct模式" => "react",
+        _ => "auto"
+    };
 
     [ObservableProperty]
     private string _permissionModeDisplay = "权限: 请求批准";
@@ -129,20 +141,46 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     {
         ChatMessages.Add(new ChatMessage { Role = "System", Content = "SIDEA Agent 已上线。系统处于待命状态。" });
-        
-        // Initialize hardcoded models
-        Models.Add(new ModelItem { Id = "gemma4:e2b-it-qat", Name = "Gemma-4 QAT" });
-        Models.Add(new ModelItem { Id = "llama3:8b-instruct", Name = "Llama3 8B" });
-        Models.Add(new ModelItem { Id = "qwen2:7b", Name = "Qwen2 7B" });
-        SelectedModel = Models[0];
-
         _ = LoadInitialDataAsync();
+    }
+
+    partial void OnSelectedModelChanged(ModelItem? value)
+    {
+        if (value != null && !string.IsNullOrEmpty(value.Id))
+        {
+            _ = ApiClient.ActivateLlmProfileAsync(value.Id);
+        }
     }
 
     private async Task LoadInitialDataAsync()
     {
         try
         {
+            // Dynamically load LLM Provider Profiles from Python backend
+            var profiles = await ApiClient.GetModelsAsync();
+            if (profiles != null && profiles.Count > 0)
+            {
+                Dispatcher.UIThread.Post(() => Models.Clear());
+                foreach (var p in profiles)
+                {
+                    var pid = p.TryGetValue("profile_id", out var idObj) ? idObj?.ToString() ?? "" : "";
+                    var name = p.TryGetValue("name", out var nObj) ? nObj?.ToString() ?? "" : "";
+                    var modelName = p.TryGetValue("model_name", out var mObj) ? mObj?.ToString() ?? "" : "";
+                    var isActive = p.TryGetValue("is_active", out var aObj) && (aObj is bool b ? b : aObj?.ToString() == "True");
+
+                    var mItem = new ModelItem { Id = pid, Name = string.IsNullOrEmpty(name) ? modelName : $"{name} · {modelName}" };
+                    Dispatcher.UIThread.Post(() => Models.Add(mItem));
+                    if (isActive)
+                    {
+                        Dispatcher.UIThread.Post(() => SelectedModel = mItem);
+                    }
+                }
+                if (SelectedModel == null && Models.Count > 0)
+                {
+                    Dispatcher.UIThread.Post(() => SelectedModel = Models[0]);
+                }
+            }
+
             var skillsJson = await _httpClient.GetStringAsync("http://localhost:8000/api/skills");
             using var doc = JsonDocument.Parse(skillsJson);
             foreach (var el in doc.RootElement.EnumerateArray())
@@ -287,6 +325,29 @@ public partial class MainWindowViewModel : ViewModelBase
         kbWindow.Show();
     }
 
+    [RelayCommand]
+    private void OpenDashboard()
+    {
+        var dbWindow = new DashboardWindow();
+        dbWindow.Show();
+    }
+
+    [RelayCommand]
+    private void OpenSystemLogs()
+    {
+        var adminWindow = new AdminWindow();
+        adminWindow.SelectTab(6);
+        adminWindow.Show();
+    }
+
+    [RelayCommand]
+    private void OpenAdmin()
+    {
+        var adminWindow = new AdminWindow();
+        adminWindow.SelectTab(0);
+        adminWindow.Show();
+    }
+
     public ObservableCollection<string> PendingAttachments { get; } = new();
 
     public async Task UploadImageFromClipboardAsync(object clipboardData)
@@ -388,6 +449,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 context_length = GetContextLengthValue(),
                 use_knowledge = UseKnowledge,
                 permission_mode = GetPermissionModeValue(),
+                execution_mode = GetExecutionModeValue(),
                 attachments = attachments
             };
             var jsonContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");

@@ -795,10 +795,14 @@ export function DashboardChart({
   const echartsRef = useRef<any>(null);
 
   const doResize = useCallback(() => {
-    try {
-      echartsRef.current?.getEchartsInstance()?.resize();
-    } catch {
-      /* noop */
+    if (echartsRef.current?.getEchartsInstance()) {
+      window.requestAnimationFrame(() => {
+        try {
+          echartsRef.current?.getEchartsInstance()?.resize({ width: 'auto', height: 'auto' });
+        } catch {
+          /* noop */
+        }
+      });
     }
   }, []);
 
@@ -811,7 +815,7 @@ export function DashboardChart({
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        if (entry.contentRect.width > 10 && entry.contentRect.height > 10) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
           doResize();
         }
       }
@@ -846,7 +850,7 @@ export function DashboardChart({
       <ReactECharts
         ref={echartsRef}
         option={themed}
-        style={{ height: '100%', width: '100%', minWidth: '100%', flex: 1 }}
+        style={{ height: '100%', width: '100%', flex: 1 }}
         theme={theme}
         notMerge={false}
         lazyUpdate={true}

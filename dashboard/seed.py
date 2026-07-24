@@ -22,6 +22,47 @@ def seed_categories():
         ("general", "通用大屏", "通用数据可视化模板库", "layout", 99),
     ]
     with get_connection(DB) as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_categories (
+            category_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            icon TEXT DEFAULT 'layout',
+            sort_order INTEGER DEFAULT 50,
+            is_enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_templates (
+            template_id TEXT PRIMARY KEY,
+            category_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            style TEXT DEFAULT 'tech-blue',
+            scene TEXT DEFAULT 'general',
+            template_type TEXT DEFAULT 'json_dashboard',
+            has_3d INTEGER DEFAULT 0,
+            preview_url TEXT,
+            local_path TEXT,
+            dashboard_json TEXT,
+            source_id TEXT DEFAULT 'sidea',
+            recommended_for TEXT DEFAULT '[]',
+            data_slots TEXT DEFAULT '[]',
+            tags TEXT DEFAULT '[]',
+            priority INTEGER DEFAULT 50,
+            is_enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS dashboard_template_aliases (
+            alias TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        );
+        """)
         for cid, name, desc, icon, order in cats:
             conn.execute(
                 """
@@ -44,6 +85,34 @@ def _load_json(name: str) -> dict:
 def seed_builtin_templates():
     """内置可预览 JSON 模板"""
     builtins = [
+        {
+            "template_id": "tpl_custom_chassis_57f363",
+            "aliases": ["设备透视", "3D 机械臂设备运维监控大屏", "chassis 3d", "机械臂大屏"],
+            "category_id": "digital_twin",
+            "name": "3D 机械臂设备运维监控大屏",
+            "description": "3D 机械臂数字孪生透视 + 电机温度趋势 + 报警列表",
+            "style": "industrial",
+            "scene": "factory",
+            "template_type": "json_dashboard",
+            "has_3d": True,
+            "priority": 110,
+            "tags": ["3D", "机械臂", "设备运维", "电机温度", "报警列表"],
+            "json_file": "custom_chassis.json",
+        },
+        {
+            "template_id": "zhaoxi-factory",
+            "aliases": ["朝夕智慧工厂", "zhaoxi factory", "Zhaoxi Smart Factory", "指挥调试中心"],
+            "category_id": "digital_twin",
+            "name": "朝夕智慧工厂 指挥调试中心",
+            "description": "数字孪生工厂全景 + 能耗监控 + 人均产能 + 储罐与烟囱动态孪生",
+            "style": "tech-blue",
+            "scene": "factory",
+            "template_type": "json_dashboard",
+            "has_3d": True,
+            "priority": 105,
+            "tags": ["数字孪生", "储罐", "能耗", "3D", "朝夕"],
+            "json_file": "zhaoxi_factory.json",
+        },
         {
             "template_id": "amr-command-center",
             "aliases": ["amr command center", "AMR Command Center"],

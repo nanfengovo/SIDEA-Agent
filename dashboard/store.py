@@ -153,14 +153,15 @@ def create_template(data: dict) -> dict:
         conn.execute(
             """
             INSERT INTO dashboard_templates (
-                template_id, category_id, name, description, style, scene,
+                template_id, category_id, category, name, description, style, scene,
                 template_type, has_3d, preview_url, local_path, dashboard_json,
                 source_id, recommended_for, data_slots, tags, priority, is_enabled,
                 created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 tid,
+                data.get("category_id", "general"),
                 data.get("category_id", "general"),
                 data["name"],
                 data.get("description", ""),

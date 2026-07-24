@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using SIDEA.Client.ViewModels;
 
@@ -156,18 +157,22 @@ public partial class MainWindow : Window
                 var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
                 if (clipboard != null)
                 {
-                    var formats = await clipboard.GetFormatsAsync();
-                    if (formats != null && (System.Linq.Enumerable.Contains(formats, "image/png") || System.Linq.Enumerable.Contains(formats, "image/jpeg") || System.Linq.Enumerable.Contains(formats, "PNG") || System.Linq.Enumerable.Contains(formats, "image/bmp")))
+                    try
                     {
-                        var data = await clipboard.GetDataAsync(System.Linq.Enumerable.FirstOrDefault(formats, f => f.Contains("image")));
-                        if (data != null)
+                        var method = clipboard.GetType().GetMethod("GetTextAsync");
+                        if (method != null)
                         {
-                            e.Handled = true;
-                            // Trigger upload in ViewModel via a new public method
-                            await vm.UploadImageFromClipboardAsync(data);
-                            return;
+                            var task = method.Invoke(clipboard, null) as Task<string?>;
+                            var text = task != null ? await task : null;
+                            if (!string.IsNullOrEmpty(text) && (text.StartsWith("data:image/") || text.EndsWith(".png") || text.EndsWith(".jpg")))
+                            {
+                                e.Handled = true;
+                                await vm.UploadImageFromClipboardAsync(text);
+                                return;
+                            }
                         }
                     }
+                    catch { }
                 }
             }
 

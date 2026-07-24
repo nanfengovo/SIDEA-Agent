@@ -8,4 +8,20 @@
     <system:String x:Key="StrKnowledgeBase">Knowledge Base</system:String>
     <system:String x:Key="StrInputPlaceholder">Ask me anything... (Shift+Enter for newline, Enter to send)</system:String>
     <system:String x:Key="StrTraceLog">Trace Log</system:String>
+    <system:String x:Key="StrDashboard">Digital Twin</system:String>
+    <system:String x:Key="StrAdminConsole">Admin Console</system:String>
+    <system:String x:Key="StrGraphRAG">Graph RAG Topology</system:String>
+    <system:String x:Key="StrVectors">Vectors &amp; Chunks</system:String>
+    <system:String x:Key="StrExperiences">Experience Audit</system:String>
+    <system:String x:Key="StrAutoRules">Auto Approval Rules</system:String>
+    <system:String x:Key="StrDocLibrary">Document Library</system:String>
+    <system:String x:Key="StrSystemLogs">System Audit Logs</system:String>
+    <system:String x:Key="StrRefresh">Refresh</system:String>
+    <system:String x:Key="StrSave">Save</system:String>
+    <system:String x:Key="StrCancel">Cancel</system:String>
+    <system:String x:Key="StrDelete">Delete</system:String>
+    <system:String x:Key="StrEdit">Edit</system:String>
+    <system:String x:Key="StrApprove">Approve</system:String>
+    <system:String x:Key="StrReject">Reject</system:String>
+    <system:String x:Key="StrSearch">Search...</system:String>
 </ResourceDictionary>

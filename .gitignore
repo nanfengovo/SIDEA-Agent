@@ -35,8 +35,16 @@ frontend/.vite/
 SIDEA.Client/bin/
 SIDEA.Client/obj/
 
-# Docker
+# Local Embedded Storage & Binary Database Files
 data/
+data/*.db
+data/*.duckdb
+data/chroma/
+data/*.json
+*.duckdb
+*.duckdb.tmp
+*.STEP
+*.bin
 
 # OS / IDE
 .DS_Store

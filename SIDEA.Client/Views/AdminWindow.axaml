@@ -1,65 +1,67 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SIDEA.Client.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
         x:Class="SIDEA.Client.Views.AdminWindow"
         x:DataType="vm:AdminViewModel"
-        Title="Admin Console"
+        Title="SIDEA Agent 控制台 &amp; 管理中心"
         RequestedThemeVariant="Dark"
         Background="{DynamicResource SemiColorBackground0}"
-        Width="1000" Height="700">
+        Width="1100" Height="750"
+        WindowStartupLocation="CenterOwner">
 
     <Window.DataContext>
         <vm:AdminViewModel/>
     </Window.DataContext>
 
     <Grid ColumnDefinitions="260,*">
-        <!-- Sidebar -->
+        <!-- Sidebar Navigation -->
         <Border Grid.Column="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0">
             <StackPanel>
                 <Border Height="64" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1">
-                    <TextBlock Text="Admin Console" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center" Margin="24,0"/>
+                    <TextBlock Text="管理与控制中心" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center" Margin="24,0"/>
                 </Border>
-                <ListBox Background="Transparent" SelectionChanged="OnTabSelectionChanged" SelectedIndex="0" Margin="12,16">
+                <ListBox Name="ModuleListBox" Background="Transparent" SelectionChanged="OnTabSelectionChanged" SelectedIndex="0" Margin="12,16">
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem">
                             <Setter Property="Padding" Value="16,12"/>
                             <Setter Property="CornerRadius" Value="8"/>
-                            <Setter Property="Margin" Value="0,0,0,8"/>
+                            <Setter Property="Margin" Value="0,0,0,6"/>
                         </Style>
                     </ListBox.Styles>
-                    <ListBoxItem Content="全局设置 (Config)" Foreground="{DynamicResource SemiColorText0}" FontSize="15"/>
-                    <ListBoxItem Content="技能 &amp; 提示词 (Skills)" Foreground="{DynamicResource SemiColorText0}" FontSize="15"/>
-                    <ListBoxItem Content="工具总览 (Tools)" Foreground="{DynamicResource SemiColorText0}" FontSize="15"/>
+                    <ListBoxItem Content="全局设置 (Config)" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="多模型 Provider 配置" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="RCS 适配层与接口映射" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="技能 &amp; 提示词 (Skills)" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="模版管理 (Templates)" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="工具总览 (Tools Hub)" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
+                    <ListBoxItem Content="系统日志与审计中心" Foreground="{DynamicResource SemiColorText0}" FontSize="14"/>
                 </ListBox>
             </StackPanel>
         </Border>
 
-        <!-- Main Content -->
-        <Border Grid.Column="1" Padding="32,24" Background="{DynamicResource SemiColorBackground0}">
+        <!-- Main Content Area -->
+        <Border Grid.Column="1" Padding="28,24" Background="{DynamicResource SemiColorBackground0}">
             <Grid>
-                <!-- Config Tab -->
+                <!-- Tab 0: Config -->
                 <Grid x:Name="ConfigTab" IsVisible="True" RowDefinitions="Auto,*">
-                    <Grid Grid.Row="0" Margin="0,0,0,24" ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="全局设置 (Sys Config)" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
-                        <Button Grid.Column="1" Content="+ Add Config" Classes="Solid Primary" CornerRadius="6" FontWeight="SemiBold" Click="OnAddConfigClick" Padding="16,8"/>
+                    <Grid Grid.Row="0" Margin="0,0,0,20" ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="全局系统配置 (System Configs)" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="+ 新增配置" Classes="Solid Primary" CornerRadius="6" FontWeight="SemiBold" Click="OnAddConfigClick" Padding="14,8"/>
                     </Grid>
                     <ScrollViewer Grid.Row="1">
                         <ItemsControl ItemsSource="{Binding Configs}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ConfigItem">
-                                    <Border Margin="0,0,0,12" Padding="20,16" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Border Margin="0,0,0,10" Padding="16,14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
                                         <Grid ColumnDefinitions="*,Auto">
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
                                                 <TextBlock Text="{Binding ConfigKey}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                <TextBlock Text="{Binding ConfigValue}" FontSize="14" Foreground="{DynamicResource SemiColorText1}" Margin="0,6,0,0"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="13" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                                                <TextBlock Text="{Binding ConfigValue}" FontSize="14" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
-                                                <Button Content="Edit" Command="{Binding $parent[Window].((vm:AdminViewModel)DataContext).EditConfigCommand}" CommandParameter="{Binding}" Classes="Tertiary" Padding="16,8"/>
-                                                <Button Content="Delete" Command="{Binding $parent[Window].((vm:AdminViewModel)DataContext).DeleteConfigCommand}" CommandParameter="{Binding}" Classes="Danger" Padding="16,8"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                                                <Button Content="编辑" Command="{Binding $parent[Window].DataContext.EditConfigCommand}" CommandParameter="{Binding}" Classes="Tertiary" Padding="12,6"/>
+                                                <Button Content="删除" Command="{Binding $parent[Window].DataContext.DeleteConfigCommand}" CommandParameter="{Binding}" Classes="Danger" Padding="12,6"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -69,27 +71,88 @@
                     </ScrollViewer>
                 </Grid>
 
-                <!-- Skills Tab -->
+                <!-- Tab 1: LLM Providers -->
+                <Grid x:Name="LlmTab" IsVisible="False" RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" Margin="0,0,0,20" ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="多模型 LLM Provider 配置" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="+ 添加 Provider" Classes="Solid Primary" Padding="14,8"/>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding LlmProviders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LlmProviderItem">
+                                    <Border Margin="0,0,0,10" Padding="16,14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                                                    <Border Background="#1A38BDF8" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding ProviderType}" Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding BaseUrl}" FontSize="13" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{Binding Latency, StringFormat='延迟: {0}'}" FontSize="12" Foreground="#52C41A"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                                                <Button Content="延迟测试" Command="{Binding $parent[Window].DataContext.TestLlmProviderCommand}" CommandParameter="{Binding}" Classes="Secondary" Padding="12,6"/>
+                                                <Button Content="编辑" Classes="Tertiary" Padding="12,6"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- Tab 2: RCS Connectors -->
+                <Grid x:Name="RcsTab" IsVisible="False" RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" Margin="0,0,0,20" ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="RCS 工业系统适配层" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="+ 新建 RCS 连接" Classes="Solid Primary" Padding="14,8"/>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding RcsConnectors}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RcsConnectorItem">
+                                    <Border Margin="0,0,0,10" Padding="16,14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
+                                                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                                <TextBlock Text="{Binding BaseUrl}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
+                                                <TextBlock Text="{Binding TimeoutMs, StringFormat='超时: {0}ms'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                                                <Button Content="绑定规则" Classes="Secondary" Padding="12,6"/>
+                                                <Button Content="编辑" Classes="Tertiary" Padding="12,6"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- Tab 3: Skills -->
                 <Grid x:Name="SkillsTab" IsVisible="False" RowDefinitions="Auto,*">
-                    <Grid Grid.Row="0" Margin="0,0,0,24" ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="技能 &amp; 提示词 (Skills &amp; Prompts)" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
-                        <Button Grid.Column="1" Content="+ Add Skill" Classes="Solid Primary" CornerRadius="6" FontWeight="SemiBold" Click="OnAddSkillClick" Padding="16,8"/>
+                    <Grid Grid.Row="0" Margin="0,0,0,20" ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="技能 &amp; 提示词 (Skills &amp; Prompts)" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <Button Grid.Column="1" Content="+ 新增技能" Classes="Solid Primary" Click="OnAddSkillClick" Padding="14,8"/>
                     </Grid>
                     <ScrollViewer Grid.Row="1">
                         <ItemsControl ItemsSource="{Binding Skills}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SkillConfigItem">
-                                    <Border Margin="0,0,0,12" Padding="20,16" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                    <Border Margin="0,0,0,10" Padding="16,14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
                                         <Grid ColumnDefinitions="*,Auto">
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
                                                 <TextBlock Text="{Binding SkillName}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                                <TextBlock Text="{Binding SkillId}" FontSize="13" Foreground="{DynamicResource SemiColorText1}" Margin="0,6,0,0"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="14" Foreground="{DynamicResource SemiColorText1}" Margin="0,4,0,0"/>
-                                                <TextBlock Text="{Binding TemplatePath}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
-                                                <Button Content="Edit" Command="{Binding $parent[Window].((vm:AdminViewModel)DataContext).EditSkillCommand}" CommandParameter="{Binding}" Classes="Tertiary" Padding="16,8"/>
-                                                <Button Content="Delete" Command="{Binding $parent[Window].((vm:AdminViewModel)DataContext).DeleteSkillCommand}" CommandParameter="{Binding}" Classes="Danger" Padding="16,8"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                                                <Button Content="编辑" Command="{Binding $parent[Window].DataContext.EditSkillCommand}" CommandParameter="{Binding}" Classes="Tertiary" Padding="12,6"/>
+                                                <Button Content="删除" Command="{Binding $parent[Window].DataContext.DeleteSkillCommand}" CommandParameter="{Binding}" Classes="Danger" Padding="12,6"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -99,24 +162,99 @@
                     </ScrollViewer>
                 </Grid>
 
-                <!-- Tools Tab -->
+                <!-- Tab 4: Templates -->
+                <Grid x:Name="TemplatesTab" IsVisible="False" RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="大屏 &amp; DSL 模板库 (10 套高清 3D 工业数字孪生模板)" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                            <TextBlock Text="精选 10 套高精 3D 智慧工厂、双臂切削机器人、AMR 洁净室与 S7-1200 驱动器全景模板，提升 Agent 数据可观测上限。" FontSize="13" Foreground="{DynamicResource SemiColorText2}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="+ 导入新模板" Classes="Solid Primary" Padding="14,8" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl ItemsSource="{Binding Templates}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TemplateItem">
+                                    <Border Width="450" Margin="0,0,16,16" Padding="18,16" CornerRadius="10" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <Grid RowDefinitions="Auto,*,Auto">
+                                            <!-- Top Badges & Title -->
+                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                    <Border Background="#1C2C4C" CornerRadius="12" Padding="8,2">
+                                                        <TextBlock Text="{Binding Category}" FontSize="11" Foreground="#00F2FE" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                    <Border Background="#2D2013" CornerRadius="12" Padding="8,2">
+                                                        <TextBlock Text="{Binding Version}" FontSize="11" Foreground="#FAAD14" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Description -->
+                                            <TextBlock Grid.Row="1" Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource SemiColorText1}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+
+                                            <!-- Bottom Info & Buttons -->
+                                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding BoundSkill, StringFormat='场景: {0}'}" FontSize="12" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                    <Button Content="👁️ 预览 DSL" Click="OnPreviewTemplateClick" Classes="Secondary" Padding="12,5" FontSize="12"/>
+                                                    <Button Content="🌐 打开大屏" Classes="Solid Primary" Padding="12,5" FontSize="12"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- Tab 5: Tools Hub -->
                 <Grid x:Name="ToolsTab" IsVisible="False" RowDefinitions="Auto,*">
-                    <TextBlock Grid.Row="0" Text="工具总览 (Tools Hub)" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" Margin="0,0,0,24"/>
+                    <TextBlock Grid.Row="0" Text="工具集总览 (Tools Hub)" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" Margin="0,0,0,20"/>
                     <ScrollViewer Grid.Row="1">
                         <ItemsControl ItemsSource="{Binding Tools}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ToolItem">
-                                    <Border Margin="0,0,0,12" Padding="20,16" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
-                                        <StackPanel VerticalAlignment="Center">
+                                    <Border Margin="0,0,0,10" Padding="16,14" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                                        <StackPanel Spacing="4">
                                             <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorPrimary}"/>
-                                            <TextBlock Text="{Binding Key}" FontSize="13" Foreground="{DynamicResource SemiColorText1}" Margin="0,6,0,0"/>
-                                            <TextBlock Text="{Binding Description}" FontSize="14" Foreground="{DynamicResource SemiColorText2}" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding Key}" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+                                            <TextBlock Text="{Binding Description}" FontSize="13" Foreground="{DynamicResource SemiColorText1}"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+                </Grid>
+
+                <!-- Tab 6: System Audit Logs -->
+                <Grid x:Name="LogsTab" IsVisible="False" RowDefinitions="Auto,Auto,*">
+                    <TextBlock Grid.Row="0" Text="系统操作日志与审计中心" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}" Margin="0,0,0,16"/>
+                    
+                    <Border Grid.Row="1" Padding="14" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" Margin="0,0,0,12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox Grid.Column="0" Text="{Binding LogSearchQuery}" PlaceholderText="搜索操作日志内容、请求参数或用户 ID..." Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding LogCategories}" SelectedItem="{Binding SelectedLogCategory}" Width="160" Margin="0,0,12,0"/>
+                            <Button Grid.Column="2" Content="查询日志" Command="{Binding RefreshLogsCommand}" Classes="Solid Primary" Padding="14,6"/>
+                        </Grid>
+                    </Border>
+
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding SystemLogs}" x:CompileBindings="False" AutoGenerateColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" RowHeight="48">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="日志 ID" Width="100" Binding="{Binding LogId}"/>
+                            <DataGridTextColumn Header="时间戳" Width="160" Binding="{Binding Timestamp}"/>
+                            <DataGridTextColumn Header="分类" Width="120" Binding="{Binding Category}"/>
+                            <DataGridTextColumn Header="级别" Width="90" Binding="{Binding Level}"/>
+                            <DataGridTextColumn Header="日志消息" Width="*" Binding="{Binding Message}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
             </Grid>
         </Border>

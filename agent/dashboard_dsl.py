@@ -15,6 +15,7 @@ Legacy Panel Array (type=dashboard, panels[].option) still works via
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -74,6 +75,93 @@ class DashboardDslV2(BaseModel):
 
     def model_dump_dashboard(self) -> Dict[str, Any]:
         return self.model_dump(exclude_none=True)
+
+
+def repair_json_string(text: str) -> str:
+    """清理与修复 LLM 输出的不标准 JSON 字符串（处理 Markdown、剥离尾随逗号、自动闭合括号等）。"""
+    if not text:
+        return ""
+    # Strip markdown block quotes
+    cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
+    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+
+    # Extract JSON object substring if surrounded by extra text
+    match = re.search(r"(\{[\s\S]*\})", cleaned)
+    if match:
+        cleaned = match.group(1)
+
+    # Remove trailing commas before closing braces/brackets
+    cleaned = re.sub(r",\s*([\}\]])", r"\1", cleaned)
+
+    # Attempt standard parse first
+    try:
+        json.loads(cleaned)
+        return cleaned
+    except Exception:
+        pass
+
+    # Basic bracket auto-closure recovery
+    open_braces = cleaned.count("{") - cleaned.count("}")
+    open_brackets = cleaned.count("[") - cleaned.count("]")
+    if open_brackets > 0:
+        cleaned += "]" * open_brackets
+    if open_braces > 0:
+        cleaned += "}" * open_braces
+
+    # Clean trailing commas again
+    cleaned = re.sub(r",\s*([\}\]])", r"\1", cleaned)
+    return cleaned
+
+
+def sanitize_dsl_payload(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """对 LLM 或算法生成的 DSL v2 对象进行自愈合清洗与数据键自动对齐。"""
+    if not isinstance(doc, dict):
+        return {}
+
+    doc.setdefault("type", "dashboard")
+    doc.setdefault("dsl_version", DSL_VERSION)
+    doc.setdefault("title", "工业数据可视化监控大屏")
+    doc.setdefault("template", "freeform_grid")
+
+    layout = doc.get("layout")
+    if not isinstance(layout, list):
+        layout = []
+        doc["layout"] = layout
+
+    data = doc.get("data")
+    if not isinstance(data, dict):
+        data = {}
+        doc["data"] = data
+
+    # Auto-heal layout items missing data_ref or data missing layout keys
+    for i, item in enumerate(layout):
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or f"panel_{i}")
+        item["id"] = item_id
+
+        if not item.get("widget"):
+            item["widget"] = "custom_echarts"
+
+        ref = item.get("data_ref")
+        if not ref:
+            ref = f"ref_{item_id}"
+            item["data_ref"] = ref
+
+        # Ensure reference exists in data
+        if ref not in data:
+            data[ref] = {
+                "option": {
+                    "backgroundColor": "transparent",
+                    "title": {"text": item.get("title") or "实时数据监控", "textStyle": {"color": "#e2e8f0", "fontSize": 12}},
+                    "grid": {"left": 36, "right": 12, "top": 36, "bottom": 24},
+                    "xAxis": {"type": "category", "data": ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]},
+                    "yAxis": {"type": "value"},
+                    "series": [{"type": "line", "smooth": True, "data": [45, 52, 60, 58, 65, 70]}],
+                }
+            }
+
+    return doc
 
 
 def validate_dsl(doc: Dict[str, Any]) -> tuple[bool, str]:
@@ -180,6 +268,10 @@ def from_legacy_panels(
 
 
 def sample_gen_deep_beta() -> Dict[str, Any]:
+    return sample_amr_command_center()
+
+
+def sample_amr_command_center() -> Dict[str, Any]:
     """Canonical DSL v2 example for AMR command center (no ECharts options in data)."""
     return {
         "type": "dashboard",

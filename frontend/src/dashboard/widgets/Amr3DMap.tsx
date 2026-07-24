@@ -4,6 +4,8 @@ import { OrbitControls, Text, useGLTF, Clone } from '@react-three/drei';
 import * as THREE from 'three';
 import type { FloorData, FloorRobot, FloorZone, WidgetRenderProps } from '../types';
 
+import { getApiUrl } from '../../config';
+
 const STATUS_COLOR: Record<string, string> = {
   busy: '#34d399',
   idle: '#3b82f6',
@@ -52,29 +54,53 @@ function Floor({ isDark }: { isDark: boolean }) {
   );
 }
 
-function ZoneCrate({ zone, isDark }: { zone: FloorZone; isDark: boolean }) {
-  const w = zone.w;
-  const d = zone.h;
-  const h = 4 + Math.min(6, (w + d) * 0.1);
-  const cx = zone.x + w / 2;
-  const cz = zone.y + d / 2;
-  const scale = 0.5;
+function Hero3DModel({ modelUrl }: { modelUrl: string }) {
+  const { scene } = useGLTF(modelUrl);
+  const groupRef = useRef<THREE.Group>(null);
+
+  // Normalize scale and center
+  const normalizedScale = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    return maxDim > 0 ? 18.0 / maxDim : 1.0;
+  }, [scene]);
+
+  useFrame(({ clock }) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = clock.getElapsedTime() * 0.4;
+    }
+  });
 
   return (
-    <group position={[(cx - 50) * scale, h * scale * 0.5, (cz - 50) * scale]}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[w * scale, h * scale, d * scale]} />
-        <meshStandardMaterial
-          color={isDark ? '#1e293b' : '#cbd5e1'}
-          roughness={0.5}
-          metalness={0.5}
-          wireframe={false}
+    <group ref={groupRef} position={[0, 0, 0]}>
+      <Clone object={scene} scale={normalizedScale} castShadow receiveShadow />
+    </group>
+  );
+}
+
+function GroundZoneOutline({ zone, isDark }: { zone: FloorZone; isDark: boolean }) {
+  const w = zone.w * 0.5;
+  const d = zone.h * 0.5;
+  const cx = (zone.x + zone.w / 2 - 50) * 0.5;
+  const cz = (zone.y + zone.h / 2 - 50) * 0.5;
+
+  return (
+    <group position={[cx, 0.05, cz]}>
+      {/* Subtle floor outline instead of giant blocking box */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[w, d]} />
+        <meshBasicMaterial
+          color={isDark ? '#0284c7' : '#38bdf8'}
+          transparent
+          opacity={0.12}
+          wireframe={true}
         />
       </mesh>
       <Text
-        position={[0, (h * scale * 0.5) + 0.5, 0]}
-        fontSize={1.5}
-        color={isDark ? '#a5f3fc' : '#0369a1'}
+        position={[0, 0.4, 0]}
+        fontSize={1.2}
+        color={isDark ? '#38bdf8' : '#0284c7'}
         anchorX="center"
         anchorY="bottom"
       >
@@ -84,69 +110,16 @@ function ZoneCrate({ zone, isDark }: { zone: FloorZone; isDark: boolean }) {
   );
 }
 
-function Robot({ robot, isDark, index, modelUrl }: { robot: FloorRobot; isDark: boolean; index: number; modelUrl: string }) {
-  const scale = 0.5;
-  const color = STATUS_COLOR[robot.status] || STATUS_COLOR.idle;
-  const targetModelUrl = getModelForRobot(index, robot, modelUrl);
-
-  const { scene } = useGLTF(targetModelUrl);
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (robot.status === 'busy' && groupRef.current) {
-      groupRef.current.position.z = (robot.y - 50) * scale + Math.sin(t * 2 + index) * 0.5;
-    }
-  });
-
-  const modelScale = targetModelUrl.includes('model_5e0f8f00') ? 0.7 : 0.35;
-
-  return (
-    <group ref={groupRef} position={[(robot.x - 50) * scale, 0, (robot.y - 50) * scale]}>
-      {/* 3D Model from Model Library */}
-      <Clone object={scene} scale={modelScale} position={[0, 0, 0]} castShadow receiveShadow />
-      
-      {/* Status indicator Light floating above */}
-      <mesh position={[0, 4.5 * scale, 0]}>
-        <sphereGeometry args={[0.35, 16, 16]} />
-        <meshBasicMaterial color={color} />
-      </mesh>
-
-      <Text
-        position={[0, 5.5 * scale, 0]}
-        fontSize={1.4}
-        color={isDark ? '#e2e8f0' : '#0f172a'}
-        anchorX="center"
-        anchorY="bottom"
-      >
-        {robot.name || robot.id}
-      </Text>
-    </group>
-  );
-}
-
-function Routes({ routes, isDark }: { routes: any[]; isDark: boolean }) {
-  if (!routes || !routes.length) return null;
-  return null;
-}
-
 const defaultZones: FloorZone[] = [
-  { id: 'z1', name: '洁净/光刻区 (Cleanroom)', x: 15, y: 15, w: 25, h: 25 },
-  { id: 'z2', name: '刻蚀/薄膜区 (Etch Zone)', x: 65, y: 15, w: 25, h: 25 },
-  { id: 'z3', name: 'FOUP 晶圆仓 (Wafer Buffer)', x: 15, y: 65, w: 25, h: 25 },
-  { id: 'z4', name: 'AGV 充电站 (Charging)', x: 65, y: 65, w: 25, h: 25 },
-];
-
-const defaultRobots: FloorRobot[] = [
-  { id: 'AMR-01', name: '晶圆搬运 AMR-01', x: 25, y: 30, status: 'busy' },
-  { id: 'COBOT-01', name: '6轴协作机械臂 Arm-01', x: 75, y: 30, status: 'busy' },
-  { id: 'ROVER-02', name: '巡检漫游车 Rover-02', x: 28, y: 75, status: 'idle' },
-  { id: 'EQUIP-03', name: '半导体加工设备 Machine-03', x: 75, y: 75, status: 'charging' },
+  { id: 'z1', name: '洁净区 (Cleanroom)', x: 20, y: 20, w: 25, h: 25 },
+  { id: 'z2', name: '加工区 (Processing)', x: 60, y: 20, w: 25, h: 25 },
+  { id: 'z3', name: '仓储区 (Storage)', x: 20, y: 60, w: 25, h: 25 },
+  { id: 'z4', name: '充能站 (Charging)', x: 60, y: 60, w: 25, h: 25 },
 ];
 
 export function Amr3DMapWidget({ data, language, height, title, theme }: WidgetRenderProps) {
   const [activeModelUrl, setActiveModelUrl] = useState<string>(
-    (data as any)?.model3d_url || '/models/model_c2bbc369.glb'
+    (data as any)?.model3d_url || '/models/model_wind_turbine.glb'
   );
 
   useEffect(() => {
@@ -155,7 +128,7 @@ export function Amr3DMapWidget({ data, language, height, title, theme }: WidgetR
       return;
     }
 
-    fetch('http://localhost:8000/api/models3d/active')
+    fetch(`${getApiUrl()}/models3d/active`)
       .then(res => res.json())
       .then(resData => {
         if (resData.active_model) {
@@ -171,62 +144,61 @@ export function Amr3DMapWidget({ data, language, height, title, theme }: WidgetR
 
   const floor = (data || {}) as FloorData;
   const zones: FloorZone[] = Array.isArray(floor.zones) && floor.zones.length > 0 ? floor.zones : defaultZones;
-  const robots: FloorRobot[] = Array.isArray(floor.robots) && floor.robots.length > 0 ? floor.robots : defaultRobots;
-  const routes = Array.isArray(floor.routes) ? floor.routes : [];
 
   return (
     <div
-      className="relative w-full h-full min-h-[240px] overflow-hidden"
-      style={{ height: heightCss, minHeight: 240 }}
+      className="relative w-full h-full min-h-[260px] overflow-hidden select-none bg-slate-950/90 rounded-xl"
+      style={{ height: heightCss, minHeight: 260 }}
     >
       {title && (
         <div
-          className="absolute top-2.5 left-3.5 z-10 font-sans text-[13px] pointer-events-none"
-          style={{ color: isDark ? '#e2e8f0' : '#334155' }}
+          className="absolute top-3 left-4 z-10 font-sans text-xs font-bold tracking-wider text-cyan-300 pointer-events-none flex items-center gap-2"
         >
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           {title}
         </div>
       )}
 
-      <Canvas shadows camera={{ position: [-25, 30, 25], fov: 45 }}>
-        <ambientLight intensity={isDark ? 0.6 : 1.0} />
+      <Canvas shadows camera={{ position: [24, 20, 28], fov: 45 }}>
+        <ambientLight intensity={isDark ? 0.9 : 1.2} />
         <directionalLight
           castShadow
-          position={[20, 40, -10]}
-          intensity={isDark ? 1.5 : 1.8}
+          position={[25, 40, 15]}
+          intensity={isDark ? 1.8 : 2.2}
           shadow-mapSize={[1024, 1024]}
-        >
-          <orthographicCamera attach="shadow-camera" args={[-50, 50, 50, -50]} />
-        </directionalLight>
-        
-        <OrbitControls makeDefault maxPolarAngle={Math.PI / 2 - 0.05} />
+        />
+        <pointLight position={[-20, 20, -20]} intensity={0.6} color="#38bdf8" />
+        <pointLight position={[20, -10, 20]} intensity={0.4} color="#f59e0b" />
+
+        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI} autoRotate autoRotateSpeed={1.5} />
 
         <Suspense fallback={null}>
-          <gridHelper args={[120, 40, isDark ? '#22d3ee' : '#0ea5e9', isDark ? '#164e63' : '#bae6fd']} position={[0, -0.05, 0]} />
-          <Floor isDark={isDark} />
+          <gridHelper args={[100, 40, isDark ? '#38bdf8' : '#0284c7', isDark ? '#0f172a' : '#cbd5e1']} position={[0, 0, 0]} />
+          
+          {/* Render Ground Zone Outlines */}
           {zones.map((z, i) => (
-            <ZoneCrate key={z.id || i} zone={z} isDark={isDark} />
+            <GroundZoneOutline key={z.id || i} zone={z} isDark={isDark} />
           ))}
-          <Routes routes={routes} isDark={isDark} />
-          {robots.map((r, i) => (
-            <Robot key={r.id || i} robot={r} isDark={isDark} index={i} modelUrl={activeModelUrl} />
-          ))}
+
+          {/* Render Active Hero 3D Model in Center */}
+          <Hero3DModel modelUrl={activeModelUrl} />
         </Suspense>
       </Canvas>
 
       <div
-        className="absolute bottom-3 left-3.5 z-10 pointer-events-none text-[10px]"
-        style={{ color: isDark ? '#94a3b8' : '#64748b' }}
+        className="absolute bottom-2.5 left-4 z-10 pointer-events-none text-[10px] text-cyan-400/80 font-mono"
       >
         {zh
-          ? 'True 3D 数字孪生引擎 · 3D 模型库已联动 · 绿运行 / 蓝待机 / 黄充电 / 红故障'
-          : 'True 3D Digital Twin Engine · 3D Model Library Connected · busy / idle / charging / fault'}
+          ? 'True 3D 数字孪生引擎 · 主 3D 建模加载完成 · 支持鼠标 360° 旋转 / 缩放'
+          : 'True 3D Digital Twin Engine · Active 3D Model Loaded · 360° Orbit View'}
       </div>
     </div>
   );
 }
 
-// Preload 3D Models from Model Library
+// Preload 3D Models
+useGLTF.preload('/models/model_wind_turbine.glb');
+useGLTF.preload('/models/model_cnc_machine.glb');
 useGLTF.preload('/models/model_c2bbc369.glb');
 useGLTF.preload('/models/model_5e0f8f00.glb');
 useGLTF.preload('/models/model_b8cd3981.glb');

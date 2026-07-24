@@ -1,4 +1,8 @@
 import os
+for key in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"]:
+    if key in os.environ:
+        del os.environ[key]
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -20,8 +24,10 @@ def _cors_origins() -> list[str]:
     ]
 
 
+from fastapi.openapi.docs import get_swagger_ui_html
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="SIDEA Agent API", version="0.1.0")
+    app = FastAPI(title="SIDEA Agent API", version="0.1.0", docs_url=None, redoc_url=None)
 
     origins = _cors_origins()
     allow_credentials = "*" not in origins
@@ -56,9 +62,21 @@ def create_app() -> FastAPI:
     os.makedirs("database", exist_ok=True)
     os.makedirs("output", exist_ok=True)
     os.makedirs("output/dashboards", exist_ok=True)
+    os.makedirs("static/swagger", exist_ok=True)
+    
+    app.mount("/static", StaticFiles(directory="static"), name="static")
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
     app.mount("/sandbox_workspace", StaticFiles(directory="sandbox_workspace"), name="sandbox_workspace")
     app.mount("/output/dashboards", StaticFiles(directory="output/dashboards"), name="dashboard_output")
+
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui_html():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url,
+            title=app.title + " - API 文档 (离线可观测)",
+            swagger_js_url="/static/swagger/swagger-ui-bundle.js",
+            swagger_css_url="/static/swagger/swagger-ui.css",
+        )
 
     @app.get("/health")
     def health():
@@ -74,6 +92,7 @@ def create_app() -> FastAPI:
             from infra.database import init_db, seed_default_config, seed_default_skills
             from integrations.rcs import ensure_rcs_schema, seed_nxp_erack_profile
             from integrations.llm import ensure_llm_schema, seed_default_llm_profiles
+            from plugins.manager import PluginManager
             init_db("config.db")
             seed_default_config("config.db")
             seed_default_skills("config.db")
@@ -82,10 +101,20 @@ def create_app() -> FastAPI:
             ensure_llm_schema("config.db")
             seed_default_llm_profiles("config.db")
             
+            # Load and register plugins
+            PluginManager().load_plugins(app=app, db_path="config.db")
+            
             # Start KB Auto-Review Loop in background
             from core.kb_auto_review import auto_review_loop
             asyncio.create_task(auto_review_loop(interval_seconds=300))
         except Exception as e:
             print(f"[startup] seed skipped: {e}")
+
+    # Also load plugins synchronously for immediate router availability
+    try:
+        from plugins.manager import PluginManager
+        PluginManager().load_plugins(app=app, db_path="config.db")
+    except Exception as e:
+        print(f"[app] Plugin sync load skipped: {e}")
 
     return app

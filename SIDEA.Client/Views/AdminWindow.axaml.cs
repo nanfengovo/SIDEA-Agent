@@ -11,11 +11,12 @@ public partial class AdminWindow : Window
         InitializeComponent();
     }
 
-    private void OnToolsTabClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    public void SelectTab(int index)
     {
-        ConfigTab.IsVisible = false;
-        SkillsTab.IsVisible = false;
-        ToolsTab.IsVisible = true;
+        if (ModuleListBox != null)
+        {
+            ModuleListBox.SelectedIndex = index;
+        }
     }
 
     private async void OnAddConfigClick(object? sender, RoutedEventArgs e)
@@ -28,7 +29,7 @@ public partial class AdminWindow : Window
 
         if (result != null)
         {
-            await vm.SaveConfigAsync(result);
+            vm.Configs.Add(result);
         }
     }
 
@@ -42,17 +43,31 @@ public partial class AdminWindow : Window
 
         if (result != null)
         {
-            await vm.SaveSkillAsync(result);
+            vm.Skills.Add(result);
         }
     }
 
     private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ListBox listBox && ConfigTab != null && SkillsTab != null && ToolsTab != null)
+        if (sender is ListBox listBox && ConfigTab != null)
         {
-            ConfigTab.IsVisible = listBox.SelectedIndex == 0;
-            SkillsTab.IsVisible = listBox.SelectedIndex == 1;
-            ToolsTab.IsVisible = listBox.SelectedIndex == 2;
+            int idx = listBox.SelectedIndex;
+            ConfigTab.IsVisible = idx == 0;
+            if (LlmTab != null) LlmTab.IsVisible = idx == 1;
+            if (RcsTab != null) RcsTab.IsVisible = idx == 2;
+            if (SkillsTab != null) SkillsTab.IsVisible = idx == 3;
+            if (TemplatesTab != null) TemplatesTab.IsVisible = idx == 4;
+            if (ToolsTab != null) ToolsTab.IsVisible = idx == 5;
+            if (LogsTab != null) LogsTab.IsVisible = idx == 6;
+        }
+    }
+
+    private async void OnPreviewTemplateClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is TemplateItem item)
+        {
+            var win = new TemplatePreviewWindow(item);
+            await win.ShowDialog(this);
         }
     }
 }

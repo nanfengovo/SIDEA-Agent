@@ -9,10 +9,11 @@ from infra.logging.structured_logger import get_structured_logger
 logger = get_structured_logger("skills.registry")
 
 # 预先导入所有工具，以便通过字符串名动态挂载
-from tools.log_tools import read_plc_log, read_rcs_log
+from tools.log_tools import read_plc_log, read_rcs_log, linkage_data_and_rcs_log
 from tools.chart_tools import generate_line_chart, generate_bar_chart
 from tools.io_tools import export_excel, write_file, read_file, generate_markdown, read_document
 from tools.plc_tools import plc_read, plc_write
+from agent.tools.s7_plc_tool import read_s7_plc_db100, write_s7_plc_register, reset_s7_plc_alarm
 from tools.api_tools import abp_rest_api
 from tools.data_tools import clean_data, split_log, text_to_sql
 from tools.time_tools import get_current_time
@@ -24,12 +25,13 @@ from skills.rcs_readonly_tools import query_erack_slot_state, fetch_shift_metric
 from tools.dashboard_tools import list_dashboard_templates, recommend_dashboard_template, render_dashboard, get_dashboard_stats
 
 # 所有 skill 都默认挂载的基础工具（不需要在 DB 中逐一声明）
-BASE_TOOLS = [get_current_time, read_document, run_python_in_sandbox, generate_image, set_active_3d_model]
+BASE_TOOLS = [get_current_time, read_document, run_python_in_sandbox, generate_image, set_active_3d_model, read_s7_plc_db100, write_s7_plc_register, reset_s7_plc_alarm, linkage_data_and_rcs_log]
 
 TOOL_MAP = {
     "get_current_time": get_current_time,
     "read_plc_log": read_plc_log,
     "read_rcs_log": read_rcs_log,
+    "linkage_data_and_rcs_log": linkage_data_and_rcs_log,
     "generate_line_chart": generate_line_chart,
     "generate_bar_chart": generate_bar_chart,
     "export_excel": export_excel,
@@ -39,6 +41,9 @@ TOOL_MAP = {
     "generate_markdown": generate_markdown,
     "plc_read": plc_read,
     "plc_write": plc_write,
+    "read_s7_plc_db100": read_s7_plc_db100,
+    "write_s7_plc_register": write_s7_plc_register,
+    "reset_s7_plc_alarm": reset_s7_plc_alarm,
     "abp_rest_api": abp_rest_api,
     "clean_data": clean_data,
     "split_log": split_log,

@@ -354,30 +354,39 @@ export function TemplatedDashboard({
     setLoading(true);
 
     const legacyMap: Record<string, string> = {
-      amr_command_center: 'tpl_custom_agv_977581',
-      gen_deep_beta: 'tpl_custom_agv_977581',
-      twin_center: 'tpl_ext_erack_4deab6',
-      gen_cyberpunk_alpha: 'tpl_ext_erack_4deab6',
-      industrial_4panel: 'tpl_custom_chassis_57f363',
-      gen_industrial_dark: 'tpl_custom_chassis_57f363',
-      freeform_grid: 'tpl_custom_general_102de1',
-      gen_glassmorphic_light: 'tpl_custom_general_102de1',
+      amr_command_center: 'tpl_digital_twin_smart_factory',
+      gen_deep_beta: 'tpl_digital_twin_smart_factory',
+      twin_center: 'tpl_digital_twin_amr_cleanroom',
+      gen_cyberpunk_alpha: 'tpl_digital_twin_robotic_arm',
+      industrial_4panel: 'tpl_digital_twin_agv_fleet',
+      gen_industrial_dark: 'tpl_digital_twin_s7_plc_diag',
+      freeform_grid: 'tpl_digital_twin_ceo_cockpit',
+      gen_glassmorphic_light: 'tpl_digital_twin_wms_asrs',
     };
     const finalTemplateId = legacyMap[templateId] || templateId;
 
     fetch(`http://localhost:8000/api/templates/${finalTemplateId}`)
       .then(res => {
-        if (!res.ok) throw new Error('Template not found');
+        if (!res.ok) {
+          // Fallback fetch default smart factory template if templateId is 404
+          return fetch(`http://localhost:8000/api/templates/tpl_digital_twin_smart_factory`).then(r => r.json());
+        }
         return res.json();
       })
       .then(data => {
         let parsed = {};
-        try { parsed = JSON.parse(data.layout_config); } catch(e) {}
+        try { 
+          parsed = typeof data.layout_config === 'string' ? JSON.parse(data.layout_config) : (data.layout_config || {}); 
+        } catch(e) {}
         setConfig(parsed);
       })
       .catch(err => {
-        console.error("Failed to load template", err);
-        setConfig({ layout: 'twin_center', bg_css: '#111' });
+        console.warn("Failed to load template, using default fallback config", err);
+        setConfig({ 
+          title: "智慧工厂可视化大屏",
+          layout: "3d_center_floating",
+          theme: "dark_blue"
+        });
       })
       .finally(() => setLoading(false));
   }, [templateId]);

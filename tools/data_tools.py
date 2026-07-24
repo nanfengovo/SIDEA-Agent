@@ -57,3 +57,61 @@ def text_to_sql(natural_query: str) -> str:
         f"【Text-to-SQL 代理执行结果】模拟已执行查询 '{natural_query}'。\n"
         f"查询结果：找到了 5 条匹配记录，平均响应时间为 230ms。"
     )
+
+
+class AnomalyDetectArgs(BaseModel):
+    csv_data: str = Field(description="包含时间序列或传感器指标的 CSV 格式字符串")
+    target_column: str = Field(description="要进行异常检测的数值列列名")
+    method: str = Field(description="检测算法: 'zscore' 或 'iqr'", default="zscore")
+    threshold: float = Field(description="异常判断阈值 (Z-Score 默认 3.0, IQR 默认 1.5)", default=3.0)
+
+
+@tool("detect_anomalies", args_schema=AnomalyDetectArgs)
+def detect_anomalies(csv_data: str, target_column: str, method: str = "zscore", threshold: float = 3.0) -> str:
+    """对工业传感器/PLC 时序数据进行 Z-Score 或 IQR 离群点异常检测与统计分析"""
+    import numpy as np
+    try:
+        df = pd.read_csv(StringIO(csv_data))
+        if target_column not in df.columns:
+            return f"异常检测失败：未在数据中找到列名 '{target_column}'。可用列：{list(df.columns)}"
+
+        series = pd.to_numeric(df[target_column], errors="coerce").dropna()
+        if len(series) == 0:
+            return f"列 '{target_column}' 不包含可计数的数值型数据。"
+
+        mean_val = float(series.mean())
+        std_val = float(series.std())
+        min_val = float(series.min())
+        max_val = float(series.max())
+
+        anomalies_idx = []
+        if method.lower() == "iqr":
+            q1 = series.quantile(0.25)
+            q3 = series.quantile(0.75)
+            iqr = q3 - q1
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+            anomalies = df[(df[target_column] < lower_bound) | (df[target_column] > upper_bound)]
+            anomalies_idx = anomalies.index.tolist()
+        else:
+            # Z-Score
+            z_scores = np.abs((series - mean_val) / (std_val if std_val > 0 else 1.0))
+            anomalies = df.loc[z_scores > threshold]
+            anomalies_idx = anomalies.index.tolist()
+
+        result = (
+            f"📊 【数据统计分析报告 - 列: {target_column}】\n"
+            f"- 样本总数: {len(series)} 行\n"
+            f"- 均值 (Mean): {mean_val:.2f} | 标准差 (Std): {std_val:.2f}\n"
+            f"- 最小值 (Min): {min_val:.2f} | 最大值 (Max): {max_val:.2f}\n"
+            f"- 算法: {method.upper()} (阈值={threshold})\n"
+            f"- 发现异常离群点数量: {len(anomalies_idx)} 处\n"
+        )
+        if anomalies_idx:
+            sample_anomalies = anomalies.head(5).to_dict(orient="records")
+            result += f"- 前 5 处异常样本: {sample_anomalies}\n"
+        else:
+            result += "- 数据运行平稳，未发现显著超出阈值的异常偏移点。\n"
+        return result
+    except Exception as e:
+        return f"异常检测处理失败: {e}"

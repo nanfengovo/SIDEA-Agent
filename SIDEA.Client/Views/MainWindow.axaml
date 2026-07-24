@@ -63,51 +63,62 @@
                     </StackPanel>
                 </StackPanel>
                 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="16">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
                             <TextBlock Text="{DynamicResource StrModels}" Foreground="{DynamicResource SemiColorText2}" FontSize="13" VerticalAlignment="Center" />
-                            <ComboBox Width="130" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" CornerRadius="20" Height="36" Padding="14,0" Background="{DynamicResource SemiColorBackground1}">
+                            <ComboBox Width="220" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" CornerRadius="18" Height="34" Padding="12,0" Background="{DynamicResource SemiColorBackground1}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" FontSize="14"/>
+                                        <TextBlock Text="{Binding Name}" FontSize="13"/>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </StackPanel>
                         
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
                             <TextBlock Text="角色" Foreground="{DynamicResource SemiColorText2}" FontSize="13" VerticalAlignment="Center" />
-                            <ComboBox Width="160" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkill}" CornerRadius="20" Height="36" Padding="14,0" Background="{DynamicResource SemiColorBackground1}">
+                            <ComboBox Width="180" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkill}" CornerRadius="18" Height="34" Padding="12,0" Background="{DynamicResource SemiColorBackground1}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" FontSize="14"/>
+                                        <TextBlock Text="{Binding Name}" FontSize="13"/>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                            <ComboBox Width="140" ItemsSource="{Binding PermissionModes}" SelectedItem="{Binding PermissionModeDisplay}" CornerRadius="20" Height="36" Padding="14,0" Background="{DynamicResource SemiColorBackground1}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" FontSize="14" Foreground="{DynamicResource SemiColorText1}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
+                        <Button Command="{Binding OpenDashboardCommand}" Classes="Secondary" CornerRadius="16" Padding="10,5" ToolTip.Tip="数字孪生大屏">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="📊" FontSize="13"/>
+                                <TextBlock Text="{DynamicResource StrDashboard}" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Command="{Binding OpenKnowledgeBaseCommand}" Classes="Secondary" CornerRadius="16" Padding="10,5" ToolTip.Tip="知识库控制中心">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="🧠" FontSize="13"/>
+                                <TextBlock Text="{DynamicResource StrKnowledgeBase}" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Command="{Binding OpenSystemLogsCommand}" Classes="Secondary" CornerRadius="16" Padding="10,5" ToolTip.Tip="系统操作与规则日志">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="⚡" FontSize="13"/>
+                                <TextBlock Text="系统日志" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
 
-                    <Button Command="{Binding ChangeThemeCommand}" Classes="Tertiary" Width="40" Height="40" CornerRadius="20" ToolTip.Tip="Toggle Theme">
-                        <PathIcon Data="{StaticResource ThemeIcon}" Width="20" Height="20" Foreground="{DynamicResource SemiColorText1}"/>
+                    <Button Command="{Binding ChangeThemeCommand}" Classes="Tertiary" Width="36" Height="36" CornerRadius="18" ToolTip.Tip="Toggle Theme">
+                        <PathIcon Data="{StaticResource ThemeIcon}" Width="18" Height="18" Foreground="{DynamicResource SemiColorText1}"/>
                     </Button>
 
-                    <Button Command="{Binding ChangeLanguageCommand}" Classes="Tertiary" Width="40" Height="40" CornerRadius="20" ToolTip.Tip="Switch Language">
-                        <PathIcon Data="{StaticResource GlobeIcon}" Width="20" Height="20" Foreground="{DynamicResource SemiColorText1}"/>
+                    <Button Command="{Binding ChangeLanguageCommand}" Classes="Tertiary" Width="36" Height="36" CornerRadius="18" ToolTip.Tip="Switch Language">
+                        <PathIcon Data="{StaticResource GlobeIcon}" Width="18" Height="18" Foreground="{DynamicResource SemiColorText1}"/>
                     </Button>
 
-                    <Button Width="40" Height="40" CornerRadius="20" Classes="Tertiary" Click="OnAdminButtonClicked">
-                        <PathIcon Data="{StaticResource SettingsIcon}" Width="20" Height="20" Foreground="{DynamicResource SemiColorText1}"/>
+                    <Button Width="36" Height="36" CornerRadius="18" Classes="Tertiary" Command="{Binding OpenAdminCommand}" ToolTip.Tip="管理后台">
+                        <PathIcon Data="{StaticResource SettingsIcon}" Width="18" Height="18" Foreground="{DynamicResource SemiColorText1}"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -130,14 +141,14 @@
                         <ItemsControl ItemsSource="{Binding ChatSessions}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectSessionCommand}" CommandParameter="{Binding SessionId}" 
-                                            HorizontalAlignment="Stretch" Classes="Tertiary" CornerRadius="12" Margin="0,0,0,4" Padding="14,12"
+                                    <Button Command="{Binding $parent[Window].DataContext.SelectSessionCommand}" CommandParameter="{Binding SessionId}" 
+                                            HorizontalAlignment="Stretch" Classes="Tertiary" CornerRadius="10" Margin="0,0,0,4" Padding="10,8"
                                             Background="Transparent" BorderThickness="0">
                                         <Grid ColumnDefinitions="Auto,*,Auto">
-                                            <PathIcon Grid.Column="0" Data="{StaticResource ChatIcon}" Width="16" Height="16" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,12,0"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="{DynamicResource SemiColorText1}" TextTrimming="CharacterEllipsis" FontSize="14" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Classes="Tertiary" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DeleteSessionCommand}" CommandParameter="{Binding SessionId}" Padding="6" CornerRadius="8">
-                                                <PathIcon Data="{StaticResource TrashIcon}" Width="14" Height="14" Foreground="{DynamicResource SemiColorDanger}"/>
+                                            <PathIcon Grid.Column="0" Data="{StaticResource ChatIcon}" Width="14" Height="14" Foreground="{DynamicResource SemiColorText2}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" ToolTip.Tip="{Binding Title}" Foreground="{DynamicResource SemiColorText1}" TextTrimming="CharacterEllipsis" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="2" Classes="Tertiary" Command="{Binding $parent[Window].DataContext.DeleteSessionCommand}" CommandParameter="{Binding SessionId}" Padding="4" CornerRadius="6" Width="24" Height="24" ToolTip.Tip="删除会话" VerticalAlignment="Center">
+                                                <PathIcon Data="{StaticResource TrashIcon}" Width="12" Height="12" Foreground="{DynamicResource SemiColorDanger}"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -195,23 +206,25 @@
                                 <!-- Action Bar -->
                                 <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
                                     <WrapPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <Button Classes="Tertiary" Command="{Binding UploadAttachmentCommand}" Padding="10,6" CornerRadius="12" Margin="0,0,16,8">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <PathIcon Data="{StaticResource PaperclipIcon}" Width="16" Height="16" Foreground="{DynamicResource SemiColorText2}"/>
-                                                <TextBlock Text="{DynamicResource StrAddAttachment}" FontSize="14" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                        <Button Classes="Tertiary" Command="{Binding UploadAttachmentCommand}" Padding="8,4" CornerRadius="12" Margin="0,0,8,6">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <PathIcon Data="{StaticResource PaperclipIcon}" Width="14" Height="14" Foreground="{DynamicResource SemiColorText2}"/>
+                                                <TextBlock Text="{DynamicResource StrAddAttachment}" FontSize="13" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
 
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,6">
                                             <ToggleSwitch IsChecked="{Binding UseKnowledge}" Classes="Solid" />
-                                            <Button Classes="Tertiary" Command="{Binding OpenKnowledgeBaseCommand}" Padding="10,6" CornerRadius="12" Margin="8,0,0,0">
-                                                <TextBlock Text="{DynamicResource StrKnowledgeBase}" FontSize="14" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
+                                            <Button Classes="Tertiary" Command="{Binding OpenKnowledgeBaseCommand}" Padding="6,4" CornerRadius="12" Margin="4,0,0,0">
+                                                <TextBlock Text="{DynamicResource StrKnowledgeBase}" FontSize="13" Foreground="{DynamicResource SemiColorText2}" VerticalAlignment="Center"/>
                                             </Button>
                                         </StackPanel>
 
-                                        <!-- Restored Context Length & Thinking Depth dropdowns -->
-                                        <ComboBox ItemsSource="{Binding ThinkingDepths}" SelectedItem="{Binding ThinkingDepthDisplay}" Width="110" Height="32" FontSize="13" CornerRadius="16" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="12,0" Margin="0,0,16,8"/>
-                                        <ComboBox ItemsSource="{Binding ContextLengths}" SelectedItem="{Binding ContextLengthDisplay}" Width="110" Height="32" FontSize="13" CornerRadius="16" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="12,0" Margin="0,0,16,8"/>
+                                        <!-- Toolbar Dropdowns: Thinking Depth, Context Length, Execution Mode, Permission Mode -->
+                                        <ComboBox ItemsSource="{Binding ThinkingDepths}" SelectedItem="{Binding ThinkingDepthDisplay}" Width="105" Height="30" FontSize="12" CornerRadius="14" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="8,0" Margin="0,0,6,6"/>
+                                        <ComboBox ItemsSource="{Binding ContextLengths}" SelectedItem="{Binding ContextLengthDisplay}" Width="105" Height="30" FontSize="12" CornerRadius="14" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="8,0" Margin="0,0,6,6"/>
+                                        <ComboBox ItemsSource="{Binding ExecutionModes}" SelectedItem="{Binding ExecutionModeDisplay}" Width="105" Height="30" FontSize="12" CornerRadius="14" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="8,0" Margin="0,0,6,6"/>
+                                        <ComboBox ItemsSource="{Binding PermissionModes}" SelectedItem="{Binding PermissionModeDisplay}" Width="145" Height="30" FontSize="12" CornerRadius="14" Background="{DynamicResource SemiColorBackground1}" BorderThickness="0" Padding="8,0" Margin="0,0,6,6"/>
                                     </WrapPanel>
 
                                     <Button Grid.Column="1" Command="{Binding SendMessageCommand}" Width="40" Height="40" CornerRadius="20" Classes="Solid Primary" VerticalAlignment="Bottom" Margin="0,0,0,8">

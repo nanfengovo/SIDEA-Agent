@@ -1,12 +1,13 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SIDEA.Client.ViewModels"
+        xmlns:webview="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.WebView"
         x:Class="SIDEA.Client.Views.KnowledgeWindow"
         x:DataType="vm:KnowledgeViewModel"
-        Title="知识库管理 (Agentic RAG)"
+        Title="Agentic Graph RAG 知识库管理"
         RequestedThemeVariant="Default"
         Background="{DynamicResource SemiColorBackground0}"
-        Width="900" Height="600"
+        Width="1050" Height="720"
         WindowStartupLocation="CenterOwner">
 
     <Window.DataContext>
@@ -16,66 +17,96 @@
     <Grid RowDefinitions="Auto,*">
         <!-- Header -->
         <Border Grid.Row="0" Background="{DynamicResource SemiColorBackground1}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,0,1" Padding="24,16">
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <PathIcon Data="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8Z" Width="20" Height="20" Foreground="#B070FF"/>
-                <TextBlock Text="知识库管理 (Agentic RAG)" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}"/>
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Border Width="32" Height="32" CornerRadius="8" Background="#B070FF">
+                        <TextBlock Text="KB" Foreground="White" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Agentic Graph RAG 工业知识库控制中心" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorPrimary}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- Tabs -->
+        <!-- Main 5 Tabs -->
         <TabControl Grid.Row="1" Margin="16" Background="Transparent">
+            <!-- Tab 1: Document Library -->
             <TabItem Header="文档库" FontSize="15">
                 <Grid RowDefinitions="Auto,Auto,*" Margin="0,16,0,0">
-                    <Border Grid.Row="0" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Background="Transparent" Padding="40" Margin="0,0,0,16">
-                        <StackPanel HorizontalAlignment="Center" Spacing="12">
-                            <PathIcon Data="M11 20H6C3.23858 20 1 17.7614 1 15C1 12.5539 2.75338 10.5186 5.06835 10.0818C5.5492 6.6433 8.46197 4 12 4C15.0298 4 17.6186 5.9255 18.6291 8.61817C21.107 8.95079 23 11.087 23 13.6667C23 16.6122 20.6122 19 17.6667 19H16M14 14L11 11L8 14M11 11V20" Width="36" Height="36" Foreground="#54A9FF" HorizontalAlignment="Center"/>
+                    <Border Grid.Row="0" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Background="{DynamicResource SemiColorBackground1}" Padding="32" Margin="0,0,0,16">
+                        <StackPanel HorizontalAlignment="Center" Spacing="10">
+                            <PathIcon Data="M11 20H6C3.23858 20 1 17.7614 1 15C1 12.5539 2.75338 10.5186 5.06835 10.0818C5.5492 6.6433 8.46197 4 12 4C15.0298 4 17.6186 5.9255 18.6291 8.61817C21.107 8.95079 23 11.087 23 13.6667C23 16.6122 20.6122 19 17.6667 19H16M14 14L11 11L8 14M11 11V20" Width="32" Height="32" Foreground="#54A9FF" HorizontalAlignment="Center"/>
                             <TextBlock Text="点击或拖拽文件到此处上传至知识库" Foreground="{DynamicResource SemiColorText0}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="支持 PDF, DOCX, Excel 以及常见日志格式。后台会自动拆分并向量化。" Foreground="{DynamicResource SemiColorText2}" FontSize="13" HorizontalAlignment="Center"/>
+                            <TextBlock Text="支持 PDF, DOCX, Excel 以及常见日志格式。后台会自动拆分切片并建立向量索引。" Foreground="{DynamicResource SemiColorText2}" FontSize="13" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     
                     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                        <TextBlock Grid.Column="0" Text="已入库文档" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
-                        <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Padding="12,6"/>
+                        <TextBlock Grid.Column="0" Text="已入库文档总览" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                        <Button Grid.Column="1" Content="刷新" Command="{Binding RefreshDocumentsCommand}" Classes="Tertiary" Padding="12,6"/>
                     </Grid>
                     
-                    <DataGrid Grid.Row="2" ItemsSource="{Binding Documents}" x:CompileBindings="False" AutoGenerateColumns="False" CanUserReorderColumns="False" CanUserResizeColumns="False" CanUserSortColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" RowHeight="48">
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding Documents}" x:CompileBindings="False" AutoGenerateColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" RowHeight="44">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="文件名" Width="*" Binding="{Binding Name}"/>
-                            
-                            <DataGridTemplateColumn Header="类型" Width="100">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#1A54A9FF" BorderBrush="#3354A9FF" BorderThickness="1" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0">
-                                            <TextBlock Text="{Binding FileType}" Foreground="#54A9FF" FontSize="12" FontWeight="SemiBold"/>
-                                        </Border>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <DataGridTextColumn Header="大小 (KB)" Width="120" Binding="{Binding SizeKB}"/>
+                            <DataGridTextColumn Header="类型" Width="100" Binding="{Binding FileType}"/>
+                            <DataGridTextColumn Header="大小 (KB)" Width="110" Binding="{Binding SizeKB}"/>
                             <DataGridTextColumn Header="向量块" Width="100" Binding="{Binding VectorChunks}"/>
-                            
-                            <DataGridTemplateColumn Header="状态" Width="100">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Status}" Foreground="#52C41A" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            
+                            <DataGridTextColumn Header="状态" Width="110" Binding="{Binding Status}"/>
                             <DataGridTextColumn Header="上传时间" Width="160" Binding="{Binding UploadTime}"/>
-                            
-                            <DataGridTemplateColumn Header="操作" Width="100">
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: Vector Embeddings & Slices -->
+            <TabItem Header="向量与切片明细" FontSize="15">
+                <Grid RowDefinitions="Auto,*" Margin="0,16,0,0">
+                    <Border Grid.Row="0" Margin="0,0,0,16" Padding="16" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" Text="{Binding VectorTestQuery}" PlaceholderText="输入测试句子以进行向量相似度检索验证 (如: 电机过热处理...)" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Grid.Column="1" Content="相似度检索测试" Command="{Binding SearchVectorsCommand}" Classes="Solid Primary" Padding="16,8"/>
+                        </Grid>
+                    </Border>
+
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Vectors}" x:CompileBindings="False" AutoGenerateColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" RowHeight="48">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="向量编号" Width="120" Binding="{Binding VectorId}"/>
+                            <DataGridTextColumn Header="切片文本内容" Width="*" Binding="{Binding TextSnippet}"/>
+                            <DataGridTextColumn Header="维度规格" Width="130" Binding="{Binding VectorDimension}"/>
+                            <DataGridTextColumn Header="相似度得分" Width="120" Binding="{Binding SimilarityScore, StringFormat='{}{0:F2}'}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: Graph RAG Knowledge Topology Canvas -->
+            <TabItem Header="Graph RAG 拓扑关联图谱" FontSize="15">
+                <Grid Margin="0,16,0,0">
+                    <Border CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" ClipToBounds="True">
+                        <NativeWebView Name="GraphRagWebView" />
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 4: Industrial Experience Audit -->
+            <TabItem Header="经验沉淀审核" FontSize="15">
+                <Grid RowDefinitions="Auto,*" Margin="0,16,0,0">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                        <TextBlock Grid.Column="0" Text="待审核的工控排查经验 (Human-in-the-Loop)" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                        <Button Grid.Column="1" Content="刷新" Command="{Binding RefreshExperiencesCommand}" Classes="Tertiary" Padding="12,6"/>
+                    </Grid>
+                    
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Experiences}" x:CompileBindings="False" AutoGenerateColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" RowHeight="56">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="排查上下文" Width="2*" Binding="{Binding Context}"/>
+                            <DataGridTextColumn Header="提取经验规则" Width="2*" Binding="{Binding Rule}"/>
+                            <DataGridTextColumn Header="状态" Width="100" Binding="{Binding Status}"/>
+                            <DataGridTemplateColumn Header="操作审核" Width="160">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center" Margin="12,0,0,0">
-                                            <Button Classes="Tertiary" Padding="4" Background="Transparent">
-                                                <PathIcon Data="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" Width="16" Height="16" Foreground="{DynamicResource SemiColorText2}"/>
-                                            </Button>
-                                            <Button Classes="Tertiary" Padding="4" Background="Transparent">
-                                                <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="16" Height="16" Foreground="#F5222D"/>
-                                            </Button>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <Button Content="确认入库" Command="{Binding $parent[Window].DataContext.ApproveExperienceCommand}" CommandParameter="{Binding}" Classes="Solid Primary" Padding="10,4"/>
+                                            <Button Content="拒绝" Command="{Binding $parent[Window].DataContext.RejectExperienceCommand}" CommandParameter="{Binding}" Classes="Secondary" Padding="10,4"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -84,22 +115,17 @@
                     </DataGrid>
                 </Grid>
             </TabItem>
-            
-            <TabItem Header="经验沉淀审核 (A+B)" FontSize="15">
-                <Grid RowDefinitions="Auto,*" Margin="0,16,0,0">
-                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                        <TextBlock Grid.Column="0" Text="待审核的高价值经验" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
-                        <Button Grid.Column="1" Content="刷新" Classes="Tertiary" Padding="12,6"/>
-                    </Grid>
-                    
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding Experiences}" x:CompileBindings="False" AutoGenerateColumns="False" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="原对话上下文" Width="*" Binding="{Binding Context}"/>
-                            <DataGridTextColumn Header="提炼规则" Width="2*" Binding="{Binding Rule}"/>
-                            <DataGridTextColumn Header="状态" Width="100" Binding="{Binding Status}"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
+
+            <!-- Tab 5: Auto-Approval Prompt Rules -->
+            <TabItem Header="自动审核 Prompt 规则" FontSize="15">
+                <Border Margin="0,16,0,0" Padding="24" Background="{DynamicResource SemiColorBackground1}" CornerRadius="8" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="AI 自动审查 Prompt 规则配置" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                        <TextBlock Text="设置 Agent 后台自主评估对话并决定是否直接入库知识库的 System Prompt 标准:" Foreground="{DynamicResource SemiColorText2}" FontSize="13"/>
+                        <TextBox Text="{Binding AutoRulePrompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="180" FontSize="14"/>
+                        <Button Content="保存审查规则" Command="{Binding SaveAutoRulesCommand}" Classes="Solid Primary" HorizontalAlignment="Left" Padding="20,10" CornerRadius="6"/>
+                    </StackPanel>
+                </Border>
             </TabItem>
         </TabControl>
     </Grid>

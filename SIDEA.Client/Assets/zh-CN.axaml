@@ -8,4 +8,20 @@
     <system:String x:Key="StrKnowledgeBase">知识库检索</system:String>
     <system:String x:Key="StrInputPlaceholder">随时问我任何问题... (Shift+Enter 换行, Enter 发送)</system:String>
     <system:String x:Key="StrTraceLog">运行日志 (Trace)</system:String>
+    <system:String x:Key="StrDashboard">数字孪生大屏</system:String>
+    <system:String x:Key="StrAdminConsole">管理后台</system:String>
+    <system:String x:Key="StrGraphRAG">知识拓扑图谱</system:String>
+    <system:String x:Key="StrVectors">向量与切片</system:String>
+    <system:String x:Key="StrExperiences">经验沉淀审核</system:String>
+    <system:String x:Key="StrAutoRules">自动审核规则</system:String>
+    <system:String x:Key="StrDocLibrary">文档库</system:String>
+    <system:String x:Key="StrSystemLogs">系统日志中心</system:String>
+    <system:String x:Key="StrRefresh">刷新</system:String>
+    <system:String x:Key="StrSave">保存</system:String>
+    <system:String x:Key="StrCancel">取消</system:String>
+    <system:String x:Key="StrDelete">删除</system:String>
+    <system:String x:Key="StrEdit">编辑</system:String>
+    <system:String x:Key="StrApprove">允许</system:String>
+    <system:String x:Key="StrReject">拒绝</system:String>
+    <system:String x:Key="StrSearch">搜索...</system:String>
 </ResourceDictionary>

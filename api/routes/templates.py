@@ -19,7 +19,7 @@ router = APIRouter()
 DB_PATH = "config.db"
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect("config.db", timeout=10.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -69,40 +69,40 @@ class BatchImportRequest(BaseModel):
     overwrite: Optional[bool] = False
 
 
-@router.get("/", response_model=List[TemplateBase])
+@router.get("/")
 def list_templates(
     style: Optional[str] = None,
     scenario: Optional[str] = None,
     category: Optional[str] = None,
     has_3d: Optional[int] = None,
     q: Optional[str] = None,
-    db: sqlite3.Connection = Depends(get_db)
 ):
-    cursor = db.cursor()
-    query = "SELECT * FROM dashboard_templates WHERE 1=1"
-    params = []
+    with get_connection("config.db") as conn:
+        cursor = conn.cursor()
+        query = "SELECT * FROM dashboard_templates WHERE 1=1"
+        params = []
 
-    if style:
-        query += " AND style = ?"
-        params.append(style)
-    if scenario:
-        query += " AND scenario = ?"
-        params.append(scenario)
-    if category:
-        query += " AND category = ?"
-        params.append(category)
-    if has_3d is not None:
-        query += " AND has_3d = ?"
-        params.append(has_3d)
-    if q:
-        query += " AND (name LIKE ? OR description LIKE ? OR scenario LIKE ?)"
-        like = f"%{q}%"
-        params.extend([like, like, like])
+        if style:
+            query += " AND style = ?"
+            params.append(style)
+        if scenario:
+            query += " AND scenario = ?"
+            params.append(scenario)
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+        if has_3d is not None:
+            query += " AND has_3d = ?"
+            params.append(has_3d)
+        if q:
+            query += " AND (name LIKE ? OR description LIKE ? OR scenario LIKE ?)"
+            like = f"%{q}%"
+            params.extend([like, like, like])
 
-    query += " ORDER BY category, style, name"
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    return [dict(row) for row in rows]
+        query += " ORDER BY category, style, name"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 @router.get("/meta/stats")
@@ -142,6 +142,13 @@ def get_template(template_id: str, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     cursor.execute("SELECT * FROM dashboard_templates WHERE template_id = ?", (template_id,))
     row = cursor.fetchone()
+    if not row:
+        # Fallback to default 3D smart factory template if template_id is missing or legacy
+        cursor.execute("SELECT * FROM dashboard_templates WHERE template_id = 'tpl_digital_twin_smart_factory'")
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("SELECT * FROM dashboard_templates LIMIT 1")
+            row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Template not found")
     return dict(row)

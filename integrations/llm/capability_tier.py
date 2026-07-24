@@ -49,25 +49,15 @@ _TWIN_STYLE = re.compile(r"(数字孪生|孪生风格|厂区仿真)", re.I)
 
 
 def wants_scene(message: str) -> bool:
-    """True only when user wants immersive sandbox scene, not multi-panel twin-style dashboard."""
+    """Check if the message indicates any 3D or digital twin intent."""
     msg = message or ""
-    if _SCENE_ONLY.search(msg):
-        return True
-    # 「数字孪生」+ 多面板大屏 → 不是 scene
-    if _TWIN_STYLE.search(msg) and _MULTI_PANEL_DASH.search(msg):
-        return False
-    # 纯「数字孪生场景」类短意图
-    if _TWIN_STYLE.search(msg) and not _MULTI_PANEL_DASH.search(msg):
-        return True
-    return False
-
+    return bool(re.search(r"(3d|三维|孪生|three\.?js|webgl|unity|gltf|场景)", msg, re.I))
 
 def detect_dashboard_tier(profile: Optional[Dict[str, Any]] = None, message: str = "") -> DashboardTier:
     """根据 Profile + 用户意图判定大屏生成策略。"""
     if not profile:
         try:
             from integrations.llm.profile_store import get_active_profile
-
             profile = get_active_profile(mask_key=True) or {}
         except Exception:
             profile = {}
@@ -85,7 +75,7 @@ def detect_dashboard_tier(profile: Optional[Dict[str, Any]] = None, message: str
     )
 
     if wants_scene(message):
-        return "scene"
+        return "scene" if commercial else "freeform"
 
     if commercial:
         return "freeform"
